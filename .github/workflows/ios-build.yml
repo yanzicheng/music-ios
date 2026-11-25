@@ -1,7 +1,8 @@
-﻿name: iOS Build
+name: iOS Build
 
-# 瑙﹀彂鏂瑰紡锛?#   1) 鎺ㄩ€佸埌 main 鍒嗘敮锛堟敼浜嗘簮鐮佽嚜鍔ㄥ嚭鍖咃級
-#   2) 鍦?Actions 椤甸潰鎵嬪姩 Run workflow
+# 触发方式：
+#   1) 推送到 main 分支（改了源码自动出包）
+#   2) 在 Actions 页面手动 Run workflow
 on:
   push:
     branches: [ main, master ]
@@ -15,7 +16,8 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------
-  # Job 1锛氱紪璇戞湭绛惧悕 .app锛堜换浣?Apple 璐﹀彿閮借兘璺戯紝浜х墿鍙洿鎺ョ敤浜?Sideloadly 鑷锛?  # ---------------------------------------------------------------
+  # Job 1：编译未签名 .app（任何 Apple 账号都能跑，产物可直接用于 Sideloadly 自签）
+  # ---------------------------------------------------------------
   build-unsigned:
     name: Build unsigned .app
     runs-on: macos-latest
@@ -52,15 +54,15 @@ jobs:
       - name: Verify bundled sources
         run: |
           set -e
-          test -f www/index.html                                   || (echo "缂哄皯 www/index.html" && exit 1)
-          test -f www/nodejs-project/main.js                       || (echo "缂哄皯 www/nodejs-project/main.js" && exit 1)
-          test -f www/nodejs-project/server/index.js                || (echo "缂哄皯 server/index.js" && exit 1)
-          test -d www/nodejs-project/闊虫簮                           || (echo "缂哄皯 闊虫簮 鐩綍" && exit 1)
+          test -f www/index.html                                   || (echo "缺少 www/index.html" && exit 1)
+          test -f www/nodejs-project/main.js                       || (echo "缺少 www/nodejs-project/main.js" && exit 1)
+          test -f www/nodejs-project/server/index.js                || (echo "缺少 server/index.js" && exit 1)
+          test -d www/nodejs-project/音源                           || (echo "缺少 音源 目录" && exit 1)
           PLIST=$(find platforms/ios -maxdepth 2 -name "*-Info.plist" | head -n 1)
-          if [ -z "$PLIST" ]; then echo "缂哄皯 Info.plist"; exit 1; fi
-          echo "--- 闊虫簮鑴氭湰 ---"
-          ls -1 www/nodejs-project/闊虫簮
-          echo "--- Info.plist: $PLIST 鍏抽敭閿?---"
+          if [ -z "$PLIST" ]; then echo "缺少 Info.plist"; exit 1; fi
+          echo "--- 音源脚本 ---"
+          ls -1 www/nodejs-project/音源
+          echo "--- Info.plist: $PLIST 关键键 ---"
           grep -E "NSAppTransportSecurity|UIBackgroundModes|UIFileSharingEnabled|CFBundleDisplayName" "$PLIST"
 
       - name: Build (release, device, unsigned)
@@ -71,9 +73,9 @@ jobs:
             --buildFlag="CODE_SIGNING_REQUIRED=NO"
             --buildFlag="CODE_SIGN_IDENTITY="
           )
-          # --no-sign 鍦ㄩ儴鍒?cordova-ios 鐗堟湰涓婁笉璇嗗埆锛屽け璐ュ垯閫€鍥炵函 buildFlag 鏂瑰紡
+          # --no-sign 在部分 cordova-ios 版本上不识别，失败则退回纯 buildFlag 方式
           if ! npx cordova build ios --release --device --no-sign "${FLAGS[@]}" 2>&1 | tee build.log; then
-            echo "::warning::甯?--no-sign 鐨勬瀯寤哄け璐ワ紝鍘绘帀璇ュ弬鏁伴噸璇?
+            echo "::warning::带 --no-sign 的构建失败，去掉该参数重试"
             npx cordova build ios --release --device "${FLAGS[@]}" 2>&1 | tee -a build.log
           fi
 
@@ -81,7 +83,7 @@ jobs:
         run: |
           set -e
           APP=$(find platforms/ios/build -maxdepth 3 -name "*.app" -type d | head -n 1)
-          if [ -z "$APP" ]; then echo "鏈壘鍒?.app 浜х墿"; find platforms/ios/build -maxdepth 3 -type d; exit 1; fi
+          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios/build -maxdepth 3 -type d; exit 1; fi
           echo "APP=$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" MusicPlayer-unsigned.zip
           ls -lh MusicPlayer-unsigned.zip
@@ -103,9 +105,9 @@ jobs:
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------
-  # Job 2锛堝彲閫夛級锛氱敤 P12 璇佷功 + mobileprovision 鍋?ad-hoc 绛惧悕锛岀洿鎺ュ嚭 .ipa
-  # 鏈厤缃?secret 鏃舵湰 job 浼氳嚜鍔ㄨ烦杩囷紝涓嶅奖鍝?Job 1
-  # 闇€瑕佺殑 secrets锛歅12_BASE64 / P12_PASSWORD / MOBILEPROVISION_BASE64
+  # Job 2（可选）：用 P12 证书 + mobileprovision 做 ad-hoc 签名，直接出 .ipa
+  # 未配置 secret 时本 job 会自动跳过，不影响 Job 1
+  # 需要的 secrets：P12_BASE64 / P12_PASSWORD / MOBILEPROVISION_BASE64
   # ---------------------------------------------------------------
   sign-ipa:
     name: Sign IPA (optional)
@@ -123,10 +125,10 @@ jobs:
         run: |
           if [ -n "$P12_BASE64" ] && [ -n "$MOBILEPROVISION_BASE64" ]; then
             echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "绛惧悕 secret 宸查厤缃紝缁х画鎵ц"
+            echo "签名 secret 已配置，继续执行"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "鏈厤缃?P12_BASE64 / MOBILEPROVISION_BASE64锛岃烦杩囩鍚?job"
+            echo "未配置 P12_BASE64 / MOBILEPROVISION_BASE64，跳过签名 job"
           fi
 
       - name: Download unsigned artifact
@@ -166,11 +168,12 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$RUNNER_TEMP/profile.mobileprovision" ~/Library/MobileDevice/Provisioning\ Profiles/
 
-          # 瀵煎嚭 provisioning profile 鍐呯殑 entitlements锛堝惈 application-identifier / get-task-allow锛?          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
+          # 导出 provisioning profile 内的 entitlements（含 application-identifier / get-task-allow）
+          security cms -D -i "$RUNNER_TEMP/profile.mobileprovision" > "$RUNNER_TEMP/profile.plist"
           plutil -extract Entitlements xml1 -o "$RUNNER_TEMP/entitlements.plist" "$RUNNER_TEMP/profile.plist"
 
           IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN" | head -n 1 | awk '{print $2}')
-          echo "绛惧悕韬唤: $IDENTITY"
+          echo "签名身份: $IDENTITY"
           echo "CODESIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
           echo "KEYCHAIN_PATH=$KEYCHAIN" >> "$GITHUB_ENV"
 
@@ -179,9 +182,10 @@ jobs:
         run: |
           set -e
           cp "$RUNNER_TEMP/profile.mobileprovision" "$APP_PATH/embedded.mobileprovision"
-          # --deep 浼氭妸 App 鍐呭祵鐨?NodeMobile.framework 绛変竴骞堕噸绛?          codesign --force --deep --timestamp=none --sign "$CODESIGN_IDENTITY" \
+          # --deep 会把 App 内嵌的 NodeMobile.framework 等一并重签
+          codesign --force --deep --timestamp=none --sign "$CODESIGN_IDENTITY" \
             --entitlements "$RUNNER_TEMP/entitlements.plist" "$APP_PATH"
-          # 鏍￠獙绛惧悕缁撴灉
+          # 校验签名结果
           codesign -dv --verbose=4 "$APP_PATH" 2>&1 | head -n 20
           codesign --verify --deep --verbose=2 "$APP_PATH"
 
