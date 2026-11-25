@@ -43,10 +43,34 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Add iOS platform
-        run: npx cordova platform add ios
+        run: |
+          node -v
+          npx cordova -v
+          npx cordova platform ls || true
+          set +e
+          npx cordova platform add ios --verbose > /tmp/add-platform.log 2>&1
+          RC=$?
+          echo "=========== ADD PLATFORM LOG (tail 80) ==========="
+          tail -n 80 /tmp/add-platform.log
+          if [ $RC -ne 0 ]; then
+            MSG=$(tail -n 25 /tmp/add-platform.log | tr -d '\r' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=cordova platform add ios failed rc=$RC::$MSG"
+            exit $RC
+          fi
+          npx cordova platform ls
 
       - name: Add nodejs-mobile plugin
-        run: npx cordova plugin add @red-mobile/nodejs-mobile-cordova
+        run: |
+          set +e
+          npx cordova plugin add @red-mobile/nodejs-mobile-cordova --verbose > /tmp/add-plugin.log 2>&1
+          RC=$?
+          echo "=========== ADD PLUGIN LOG (tail 60) ==========="
+          tail -n 60 /tmp/add-plugin.log
+          if [ $RC -ne 0 ]; then
+            MSG=$(tail -n 25 /tmp/add-plugin.log | tr -d '\r' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=cordova plugin add failed rc=$RC::$MSG"
+            exit $RC
+          fi
 
       - name: Sync sources into platform
         run: npx cordova prepare ios
