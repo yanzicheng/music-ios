@@ -207,7 +207,7 @@ git push -u origin main
 
 1. **后台播放**：`UIBackgroundModes=audio` 已加，但 WKWebView 的默认音频类别是 `ambient`，
    锁屏后可能被静音/暂停。要彻底解决需在 `AppDelegate.m` 里设置
-   `AVAudioSession` 类别为 `playback`，代码片段见 `ios/AppDelegate-audio-session.md`（可选步骤，需改平台工程或写成 hook）。
+   `AVAudioSession` 类别为 `playback`，代码片段见 `ios-notes/AppDelegate-audio-session.md`（可选步骤，需改平台工程或写成 hook）。
 2. **静音键**：同上，类别为 `playback` 后才会忽略静音开关。
 3. **下载目录**：服务端下载写入 `Documents/MusicPlayerData/下载`，通过「文件」App 可见（已开 UIFileSharing）。
 4. **音源可用性**：8 个音源脚本原样搬运，但部分脚本内部若硬编码了 `10.0.2.2`、安卓 UA 或 `Android` 判断，需逐个在真机验证；
