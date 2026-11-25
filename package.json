@@ -1,0 +1,30 @@
+{
+  "name": "musicplayer-ios",
+  "displayName": "音乐",
+  "version": "1.0.0",
+  "private": true,
+  "description": "音乐播放器 iOS 移植工程（Cordova + nodejs-mobile）",
+  "license": "UNLICENSED",
+  "scripts": {
+    "ios:add": "cordova platform add ios",
+    "ios:plugin": "cordova plugin add @red-mobile/nodejs-mobile-cordova",
+    "ios:prepare": "cordova prepare ios",
+    "ios:build": "cordova build ios --release --device --no-sign",
+    "ios:clean": "cordova clean ios"
+  },
+  "devDependencies": {
+    "cordova": "^12.0.0",
+    "cordova-ios": "^7.1.1"
+  },
+  "dependencies": {
+    "@red-mobile/nodejs-mobile-cordova": "^3.4.2"
+  },
+  "cordova": {
+    "platforms": [
+      "ios"
+    ],
+    "plugins": {
+      "@red-mobile/nodejs-mobile-cordova": {}
+    }
+  }
+}

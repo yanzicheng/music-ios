@@ -1,0 +1,11 @@
+{
+  "name": "musicplayer-nodejs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "音乐 App 的内嵌 Node 服务端（nodejs-mobile 运行时入口）",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,25 @@
+# ---- Cordova 生成物（CI 每次重建，不入库）----
+platforms/
+plugins/
+node_modules/
+
+# ---- Cordova 中间产物 ----
+www/cordova.js
+www/cordova_plugins.js
+www/cordova-js-src/
+merges/
+
+# ---- 构建产物 ----
+*.app
+*.ipa
+*.zip
+build.log
+
+# ---- 系统 / 编辑器 ----
+.DS_Store
+Thumbs.db
+*.xcuserstate
+xcuserdata/
+.idea/
+.vscode/
+*.swp

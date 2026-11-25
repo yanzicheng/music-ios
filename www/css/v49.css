@@ -1,0 +1,55 @@
+/* ==========================================================================
+   v49 补丁（v3.18）
+   1. 刷歌页纵向节奏：v48 用三处 auto 均分剩余空白，于是"收藏 → 进度条"这段
+      中间吃了最大的一块，观感仍是"上下紧、中间空"。
+      这里改成只留两处 auto —— 封面之上、控制键之下，剩余空白全部推到卡片
+      上下两端；封面→歌名→收藏→进度条→控制键做成紧凑一组。
+   2. 刷歌页底部给 tab 栏留出真实的呼吸位，控制键不再贴住卡片底边。
+   ========================================================================== */
+
+/* ---------------- 1. 刷歌页纵向节奏 ---------------- */
+.page[data-page="swipe"] .swipe-card {
+  padding-bottom: 0 !important;
+}
+
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  height: 100% !important;
+}
+
+/* 封面：上端吸收剩余空白（第一个 auto），下方 0 —— 与歌名组成紧凑组 */
+.page[data-page="swipe"] .swipe-cover {
+  width: min(90vw, 352px, 43vh) !important;
+  height: auto !important;
+  margin: auto auto 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* 歌名 + 歌手：紧贴封面 */
+.page[data-page="swipe"] .swipe-song {
+  margin: 18px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* 喜欢/收藏：紧跟歌名 */
+.page[data-page="swipe"] .swipe-actions {
+  margin: 12px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* 进度条：固定呼吸位 22px，不再抢剩余空白 */
+.page[data-page="swipe"] .swipe-prog {
+  margin: 22px 0 0 !important;
+  height: 14px !important;
+  padding: 0 20px !important;
+  flex: 0 0 auto !important;
+}
+
+/* 控制键：紧跟进度条，剩余空白全部留到它下方（第二个 auto） */
+.page[data-page="swipe"] .swipe-ctrl {
+  margin: 16px 0 auto !important;
+  padding-bottom: 0 !important;
+  flex: 0 0 auto !important;
+}

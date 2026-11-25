@@ -1,0 +1,395 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#31C27C">
+<meta name="format-detection" content="telephone=no">
+<title>QQ音乐·本地版</title>
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/fx.css">
+<link rel="stylesheet" href="css/player3.css">
+<link rel="stylesheet" href="css/qq3.css">
+<link rel="stylesheet" href="css/v33.css">
+  <link rel="stylesheet" href="css/v34.css">
+<link rel="stylesheet" href="css/v36.css">
+<link rel="stylesheet" href="css/v37.css">
+<link rel="stylesheet" href="css/v38.css">
+<link rel="stylesheet" href="css/v39.css">
+<link rel="stylesheet" href="css/v40.css">
+<link rel="stylesheet" href="css/v41.css">
+<link rel="stylesheet" href="css/v42.css">
+<link rel="stylesheet" href="css/v43.css">
+<link rel="stylesheet" href="css/v44.css">
+<link rel="stylesheet" href="css/v45.css">
+<link rel="stylesheet" href="css/v46.css">
+<link rel="stylesheet" href="css/v47.css">
+  <link rel="stylesheet" href="css/v48.css">
+<link rel="stylesheet" href="css/v49.css">
+<link rel="stylesheet" href="css/v50.css">
+<link rel="stylesheet" href="css/v51.css">
+<link rel="stylesheet" href="css/v52.css">
+<link rel="stylesheet" href="css/v53.css">
+<link rel="stylesheet" href="css/v54.css">
+</head>
+<body>
+
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.53.85l10-6.5a1 1 0 0 0 0-1.7l-10-6.5A1 1 0 0 0 8 5.5Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="7" y="5" width="3.6" height="14" rx="1.6" fill="currentColor" stroke="none"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="M18.5 6.2v11.6a1 1 0 0 1-1.55.84L9 13.4v4.1a1 1 0 0 1-2 0V6.5a1 1 0 0 1 2 0v4.1l7.95-5.24a1 1 0 0 1 1.55.84Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="M5.5 6.2v11.6a1 1 0 0 0 1.55.84L15 13.4v4.1a1 1 0 0 0 2 0V6.5a1 1 0 0 0-2 0v4.1L7.05 5.36A1 1 0 0 0 5.5 6.2Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M17 4.5h3.5V8M20.2 4.8 4.5 19.2M17 19.5h3.5V16M4.4 4.9l4 4.1m7.2 6.1 4.6 4.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.2 5.1 13.6a4.6 4.6 0 0 1 6.5-6.5l.4.4.4-.4a4.6 4.6 0 0 1 6.5 6.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-heart-fill" viewBox="0 0 24 24"><path d="M12 20.4 4.9 13.6a4.8 4.8 0 0 1 6.8-6.8l.3.3.3-.3a4.8 4.8 0 0 1 6.8 6.8Z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.4" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.2 4.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M10 17.5V7l8-2v9.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><circle cx="7.6" cy="17.6" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="15.6" cy="14.9" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.6v5.6M12 16.3v.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.4 12a7.4 7.4 0 1 1-2.2-5.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M19.6 4.8v4.4h-4.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M4.5 7h11M4.5 12h11M4.5 17h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18 13.4v4.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="16.2" cy="18.4" r="1.8" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6.4 6.4 11.2 11.2M17.6 6.4 6.4 17.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6.5 9.5 5.5 5.5 5.5-5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="m6.5 14.5 5.5-5.5 5.5 5.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.7" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4.8 10.6 12 4.6l7.2 6v8.1a1.3 1.3 0 0 1-1.3 1.3H6.1a1.3 1.3 0 0 1-1.3-1.3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="m15.3 8.7-2 4.6-4.6 2 2-4.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.6" r="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M5.4 19.4c.7-3.2 3.4-5 6.6-5s5.9 1.8 6.6 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+  <symbol id="i-lyric" viewBox="0 0 24 24"><path d="M4.6 7h14.8M4.6 11.4h10.4M4.6 15.8h12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="18.4" cy="17.6" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.3" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.4V12l3.2 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 4.6 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4.6 7h14.8M4.6 12h14.8M4.6 17h8.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-comment" viewBox="0 0 24 24"><path d="M19.4 12.4c0 3.7-3.3 6.6-7.4 6.6-1 0-2-.2-2.9-.5L4.8 19.5l1.1-3.3a6.3 6.3 0 0 1-1.3-3.8c0-3.7 3.3-6.6 7.4-6.6s7.4 2.9 7.4 6.6Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4.8v9.4m0 0 3.4-3.4M12 14.2l-3.4-3.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.4 16.6v1.2a1.6 1.6 0 0 0 1.6 1.6h10a1.6 1.6 0 0 0 1.6-1.6v-1.2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M5.5 7.5h13M9.6 7.5V5.6h4.8v1.9M7.4 7.5l.8 11.1a1.4 1.4 0 0 0 1.4 1.3h4.8a1.4 1.4 0 0 0 1.4-1.3l.8-11.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-eq" viewBox="0 0 24 24"><rect x="4" y="10" width="3" height="9" rx="1.5" fill="currentColor" stroke="none"/><rect x="10.5" y="5" width="3" height="14" rx="1.5" fill="currentColor" stroke="none"/><rect x="17" y="12.5" width="3" height="6.5" rx="1.5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-order" viewBox="0 0 24 24"><path d="M4.6 6.8h9.2M4.6 12h9.2M4.6 17.2h5.4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M17.4 7v9.4m0 0 2.6-2.6m-2.6 2.6-2.6-2.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-single" viewBox="0 0 24 24"><path d="M6.6 9.6a6.6 6.6 0 0 1 10.9-1.7M18 4.9v3.3h-3.3M17.4 14.4A6.6 6.6 0 0 1 6.5 16.1M6 19.1v-3.3h3.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.6 9.6v4.9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></symbol>
+</svg>
+
+<div id="app">
+  <main class="pages">
+
+    <section class="page active" data-page="home">
+      <header class="top home-top">
+        <button class="search-entry" type="button" data-act="search-open">
+          <svg class="icon"><use href="#i-search"></use></svg><span>搜索歌曲、歌手、歌单</span>
+        </button>
+      </header>
+      <nav class="cat-tabs" id="catTabs" role="tablist">
+        <button class="cat-tab active" type="button" role="tab" aria-selected="true" data-act="cat-switch" data-cat="recommend">推荐</button>
+        <button class="cat-tab" type="button" role="tab" aria-selected="false" data-act="cat-switch" data-cat="hall">乐馆</button>
+        <button class="cat-tab" type="button" role="tab" aria-selected="false" data-act="cat-switch" data-cat="rank">排行榜</button>
+        <button class="cat-tab" type="button" role="tab" aria-selected="false" data-act="cat-switch" data-cat="artist">歌手</button>
+        <button class="cat-tab" type="button" role="tab" aria-selected="false" data-act="cat-switch" data-cat="playlist">歌单</button>
+      </nav>
+      <div class="scroll" id="homeScroll"></div>
+    </section>
+
+    <section class="page" data-page="swipe">
+      <div class="swipe-wall" id="swipeWall" aria-hidden="true">
+        <div class="wall-layer" id="wallA"></div>
+        <div class="wall-layer" id="wallB"></div>
+        <div class="wall-veil"></div>
+      </div>
+      <div class="swipe-head">
+        <button class="swipe-refresh" type="button" data-act="swipe-shuffle">
+          <svg class="icon"><use href="#i-refresh"></use></svg>换一批
+        </button>
+      </div>
+      <div class="swipe-scroll" id="swipeScroll"></div>
+    </section>
+
+    <section class="page" data-page="mine">
+      <header class="top top-plain">
+        <h1>我的</h1>
+        <div class="top-actions">
+          <button class="top-ico" type="button" data-act="mine-refresh"><svg class="icon"><use href="#i-refresh"></use></svg></button>
+        </div>
+      </header>
+      <div class="scroll" id="mineScroll"></div>
+    </section>
+
+  </main>
+
+  <div id="mini" aria-hidden="true">
+    <div class="mini-main" data-act="player-open">
+      <div class="mini-cover"><img id="miniCover" alt="" loading="lazy"></div>
+      <div class="mini-info">
+        <div class="mini-name" id="miniName">未在播放</div>
+        <div class="mini-singer" id="miniSinger">选择一首歌开始</div>
+      </div>
+    </div>
+    <button class="mini-btn" id="miniPrev" type="button" data-act="prev-song" aria-label="上一首"><svg class="icon"><use href="#i-prev"></use></svg></button>
+    <button class="mini-btn" id="miniPlay" type="button" data-act="toggle-play" aria-label="播放/暂停"></button>
+    <button class="mini-btn" type="button" data-act="next-song" aria-label="下一首"><svg class="icon"><use href="#i-next"></use></svg></button>
+    <button class="mini-btn mini-fav" id="miniFav" type="button" data-act="mini-fav" aria-label="喜欢" aria-pressed="false"><svg class="icon"><use href="#i-heart"></use></svg></button>
+    <button class="mini-btn" type="button" data-act="open-queue" aria-label="播放队列"><svg class="icon"><use href="#i-queue"></use></svg></button>
+    <div class="mini-progress"><div id="miniBar"></div></div>
+  </div>
+
+  <!-- v3.16：我的页不显示底部迷你条，改为右下角漂浮播放球（可拖动，点击进播放页） -->
+  <button id="miniBall" class="mini-ball" type="button" data-act="player-open" aria-label="打开播放页">
+    <img id="miniBallCover" alt="" loading="lazy">
+    <span class="mini-ball-ring"></span>
+    <span class="mini-ball-ico"><svg class="icon"><use href="#i-play"></use></svg></span>
+  </button>
+
+  <nav id="tabbar" role="tablist">
+    <button class="tab active" type="button" data-tab="home" role="tab" aria-selected="true">
+      <span class="mi mi-tab-home"></span><span class="tab-t">首页</span>
+    </button>
+    <button class="tab" type="button" data-tab="swipe" role="tab" aria-selected="false">
+      <span class="mi mi-tab-swipe"></span><span class="tab-t">刷歌</span>
+    </button>
+    <button class="tab" type="button" data-tab="mine" role="tab" aria-selected="false">
+      <span class="mi mi-tab-mine"></span><span class="tab-t">我的</span>
+    </button>
+  </nav>
+</div>
+
+<section id="detailPanel" aria-hidden="true">
+  <header class="panel-head">
+    <button class="panel-back" type="button" data-act="detail-close"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="panel-title" id="detailTitle">歌单</div>
+    <span class="panel-pad"></span>
+  </header>
+  <div class="panel-body" id="detailBody"></div>
+</section>
+
+<section id="searchPanel" aria-hidden="true">
+  <header class="search-head">
+    <button class="panel-back" type="button" data-act="search-close"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="search-box">
+      <svg class="icon"><use href="#i-search"></use></svg>
+      <input id="searchInput" type="search" placeholder="搜索歌曲、歌手、专辑" autocomplete="off" enterkeyhint="search">
+      <button class="clear-btn" type="button" data-act="search-clear" hidden><svg class="icon"><use href="#i-close"></use></svg></button>
+    </div>
+    <button class="search-go" type="button" data-act="search-submit">搜索</button>
+  </header>
+  <div class="seg" id="searchSeg">
+    <button class="seg-item active" type="button" data-platform="kw">酷我</button>
+    <button class="seg-item" type="button" data-platform="tx">QQ</button>
+  </div>
+  <div class="panel-body" id="searchBody"></div>
+</section>
+
+<section id="importPanel" aria-hidden="true">
+  <header class="panel-head">
+    <button class="panel-back" type="button" data-act="import-close"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="panel-title" id="importTitle">导入歌单</div>
+    <span class="panel-pad"></span>
+  </header>
+  <div class="import-form">
+    <div class="import-oses">
+      <span class="import-os qq">QQ音乐</span>
+      <span class="import-os wy">网易云</span>
+      <span class="import-os kg">酷狗</span>
+      <span class="import-os txt">纯文本</span>
+    </div>
+    <textarea id="importText" rows="3" autocomplete="off" placeholder="粘贴歌单链接或歌单 ID，例如 https://y.qq.com/n/ryqq/playlist/7011264340 或 3778678；也可直接粘贴歌曲列表（每行 歌名 - 歌手）"></textarea>
+    <div class="import-row">
+      <button class="btn primary import-go" type="button" data-act="import-submit">导入</button>
+    </div>
+  </div>
+  <div class="panel-body" id="importBody">
+    <div class="empty">支持 QQ音乐、网易云、酷狗 歌单链接 / ID，解析失败时可粘贴纯文本歌单兜底</div>
+  </div>
+</section>
+
+<section id="dlPanel" aria-hidden="true">
+  <header class="panel-head">
+    <button class="panel-back" type="button" data-act="dl-close" aria-label="返回"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="panel-title">我的下载</div>
+    <span class="panel-pad"></span>
+  </header>
+  <div class="dl-sum" id="dlSum">正在读取…</div>
+  <div class="panel-body" id="dlBody"></div>
+</section>
+
+<section id="player" aria-hidden="true">
+  <div id="playerBg"></div>
+  <div class="p-scrim"></div>
+  <div class="p-wrap">
+    <header id="pHead">
+      <button class="p-ico" type="button" data-act="player-close" aria-label="收起"><svg class="icon"><use href="#i-down"></use></svg></button>
+      <div class="p-title">
+        <div class="p-name" id="pName">未在播放</div>
+        <div class="p-singer" id="pSinger">—</div>
+      </div>
+      <button class="p-ico" type="button" data-act="open-more" aria-label="更多"><svg class="icon"><use href="#i-more"></use></svg></button>
+    </header>
+
+    <div class="p-stage" id="stage">
+      <div class="disc-wrap" data-act="toggle-lyric" role="button" aria-label="切换歌词">
+        
+        <div class="disc" id="disc">
+          <div class="disc-ring"></div>
+          <img id="discCover" class="disc-cover" alt="">
+          <div class="disc-loading"><span class="spin"></span></div>
+        </div>
+      </div>
+      <div class="lyric-wrap" id="lyricWrap"><div class="lyric-list" id="lyricList"></div></div>
+    </div>
+
+    <div class="p-foot">
+      <div class="p-actions">
+        <button class="p-act" id="btnFav" type="button" data-act="toggle-fav"><svg class="icon"><use href="#i-heart-fill"></use></svg><span>喜欢</span></button>
+        <button class="p-act" type="button" data-act="download-current"><svg class="icon"><use href="#i-download"></use></svg><span>下载</span></button>
+        <button class="p-act" type="button" data-act="open-addto"><svg class="icon"><use href="#i-plus"></use></svg><span>收藏</span></button>
+        <button class="p-act" id="btnSound" type="button" data-act="open-sound" data-tab="quality"><b id="qualityLabel">较高</b><span id="fxLabel">音质音效</span></button>
+        <button class="p-act" id="btnLyric" type="button" data-act="toggle-lyric"><svg class="icon"><use href="#i-lyric"></use></svg><span>歌词</span></button>
+        <button class="p-act" id="btnSleep" type="button" data-act="open-sleep"><svg class="icon"><use href="#i-clock"></use></svg><b id="sleepLabel" hidden></b><span>定时</span></button>
+      </div>
+
+      <div class="p-bar-row">
+        <span class="p-time" id="tCur">00:00</span>
+        <div class="bar" id="bar"><div class="bar-line"></div><div class="bar-fill" id="barFill"></div><div class="bar-knob" id="barKnob"></div></div>
+        <span class="p-time" id="tDur">00:00</span>
+      </div>
+
+      <div class="p-ctrl">
+        <button class="p-icon-btn" id="btnMode" type="button" data-act="cycle-mode" aria-label="播放模式"><svg class="icon"><use href="#i-order"></use></svg></button>
+        <button class="p-ctrl-btn" type="button" data-act="prev-song" aria-label="上一首"><span class="mi mi-prev"></span></button>
+        <button class="p-play" id="btnPlay" type="button" data-act="toggle-play" aria-label="播放/暂停"><svg class="icon"><use href="#i-play"></use></svg></button>
+        <button class="p-ctrl-btn" type="button" data-act="next-song" aria-label="下一首"><span class="mi mi-next"></span></button>
+        <button class="p-icon-btn" type="button" data-act="open-queue" aria-label="播放队列"><svg class="icon"><use href="#i-queue"></use></svg></button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<section id="soundPanel" aria-hidden="true">
+  <header class="sp-head">
+    <button class="sp-back" type="button" data-act="sound-close" aria-label="返回"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="sp-title">音质与音效</div>
+    <button class="sp-reset" type="button" data-act="fx-reset">重置音效</button>
+  </header>
+
+  <div class="sp-tabs" role="tablist">
+    <button class="sp-tab on" type="button" role="tab" data-act="sound-tab" data-tab="quality" aria-selected="true">音质</button>
+    <button class="sp-tab" type="button" role="tab" data-act="sound-tab" data-tab="fx" aria-selected="false">音效</button>
+  </div>
+
+  <div class="sp-scroll" id="spScroll">
+    <div class="sp-pane" id="paneQuality">
+      <div class="q-card" id="qReal">
+        <div class="q-card-l">
+          <b id="qRealTitle">尚未播放</b>
+          <span id="qRealSub">开始播放后这里显示当前音频流的实测编码</span>
+        </div>
+        <span class="q-badge" id="qRealBadge" hidden></span>
+      </div>
+
+      <div class="q-strict-row">
+        <div class="q-strict-txt">
+          <b>严格无损</b>
+          <span>只接受实测真无损音源，标称高解析但实测不达标时不放行</span>
+        </div>
+        <button class="fx-switch" id="qStrict" type="button" data-act="q-strict" aria-pressed="false"><i></i></button>
+      </div>
+
+      <div class="sp-h">音质档位</div>
+      <div class="q-list" id="qList"></div>
+    </div>
+
+    <div class="sp-pane" id="paneFx" hidden>
+      <div class="fx-switch-row">
+        <div class="fx-switch-txt">
+          <b>音效开关</b>
+          <span id="fxStateText">关闭时为原声直通</span>
+        </div>
+        <button class="fx-switch" id="fxSwitch" type="button" data-act="fx-toggle" aria-pressed="false"><i></i></button>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">音效预设</div>
+        <div class="fx-chips" id="fxPresets"></div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">均衡器 <span class="fx-h-sub" id="fxEqNow">0dB</span></div>
+        <canvas id="fxCurve" class="fx-curve" width="640" height="150"></canvas>
+        <div class="fx-eq" id="fxEq"></div>
+        <div class="fx-eq-foot">
+          <button class="fx-mini" type="button" data-act="fx-eq-flat">全部归零</button>
+          <button class="fx-mini" type="button" data-act="fx-eq-reset-preset">恢复预设曲线</button>
+        </div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">立体声宽度 <span class="fx-h-sub" id="fxWidthVal">0%</span></div>
+        <input class="fx-range" id="fxWidth" type="range" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">低音增强 <span class="fx-h-sub" id="fxBassVal">0%</span></div>
+        <input class="fx-range" id="fxBass" type="range" min="0" max="100" step="1" value="0">
+      </div>
+
+      <div class="fx-switch-row">
+        <div class="fx-switch-txt">
+          <b>智能音量平衡</b>
+          <span>压缩器动态均衡，弱歌不再听不清</span>
+        </div>
+        <button class="fx-switch" id="fxSmart" type="button" data-act="fx-smart" aria-pressed="false"><i></i></button>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">淡入淡出 <span class="fx-h-sub" id="fxFadeVal">0.0s</span></div>
+        <input class="fx-range" id="fxFade" type="range" min="0" max="5" step="0.5" value="0">
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">播放速度 <span class="fx-h-sub" id="fxRateVal">1.0x</span></div>
+        <div class="fx-chips" id="fxRate"></div>
+      </div>
+
+      <div class="fx-section">
+        <button class="fx-save" type="button" data-act="fx-save">保存为自定义预设</button>
+        <div class="fx-chips fx-custom" id="fxCustom"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div id="sheet" aria-hidden="true">
+  <div class="mask" data-close="sheet"></div>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <span id="sheetTitle">标题</span>
+      <button class="sheet-close" type="button" data-close="sheet"><svg class="icon"><use href="#i-close"></use></svg></button>
+    </div>
+    <div class="sheet-body" id="sheetContent"></div>
+  </div>
+</div>
+
+<div id="dialog" aria-hidden="true">
+  <div class="mask" data-close="dialog"></div>
+  <div class="dialog-card">
+    <div class="dialog-title" id="dialogTitle">提示</div>
+    <input id="dialogInput" type="text" autocomplete="off">
+    <div class="dialog-hint" id="dialogHint"></div>
+    <div class="dialog-btns">
+      <button class="btn" type="button" data-close="dialog">取消</button>
+      <button class="btn primary" id="dialogOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- iOS 移植：cordova.js 由 cordova prepare 注入到 www/（浏览器直接打开时会 404，属正常） -->
+<script src="cordova.js"></script>
+<!-- iOS 基址优先探测（127.0.0.1:34200），必须在 api.js 之前 -->
+<script src="js/api-base.js"></script>
+<script src="js/api.js"></script>
+<script src="js/audiofx.js"></script>
+<script src="js/player.js"></script>
+<script src="js/app.js"></script>
+<!-- Cordova 入口：deviceready 后启动内嵌 Node 服务端 -->
+<script src="js/index.js"></script>
+</body>
+</html>

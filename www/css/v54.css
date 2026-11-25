@@ -1,0 +1,123 @@
+/* ==========================================================================
+   v54 补丁（v3.23）  目标：刷歌页按图三做沉浸式歌手页效果
+   1) 歌词去掉半透明背景框（无底色/无模糊/无描边），只留文字，区域放大
+   2) 移除底部控制条（模式/上一首/播放/下一首/队列），进度条沉到最底
+   3) 喜欢/收藏下移到进度条之上，歌词区吃掉腾出来的全部空间
+   4) 整卡点击切暂停/播放，暂停态封面正中浮出播放三角，播放态隐藏
+   ========================================================================== */
+
+/* ---------------- 1. 纵向节奏：歌词自适应吃满剩余高度 ---------------- */
+.page[data-page="swipe"] .swipe-main {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  height: 100% !important;
+  padding: 0 0 12px !important;
+  gap: 0 !important;
+  overflow: hidden !important;
+}
+
+/* ---------------- 2. 歌词：彻底去掉背景框 ---------------- */
+.page[data-page="swipe"] .swipe-lyric {
+  position: relative !important;
+  flex: 1 1 auto !important;
+  min-height: 96px !important;
+  height: auto !important;
+  width: min(86vw, 360px) !important;
+  margin: 12px auto 0 !important;
+  border-radius: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  background: none !important;
+  background-image: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+.page[data-page="swipe"] .swipe-lyric-box {
+  height: 100% !important;
+  padding: 6px 10px !important;
+  overflow: hidden !important;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%) !important;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%) !important;
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line {
+  font-size: 15px !important;
+  line-height: 23px !important;
+  padding: 2px 0 !important;
+  text-align: center !important;
+}
+
+/* 去掉背景框后靠字重/透明度拉层次，不再用发光描边 */
+.page[data-page="swipe"] .swipe-lyric .lyric-line.active {
+  text-shadow: 0 1px 12px rgba(0, 0, 0, .35) !important;
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line {
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .28) !important;
+}
+
+/* ---------------- 3. 底部：删控制条，进度条沉底，喜欢/收藏下移 ---------------- */
+.page[data-page="swipe"] .swipe-ctrl {
+  display: none !important;
+}
+
+.page[data-page="swipe"] .swipe-actions {
+  margin: auto 0 0 !important;
+  flex: 0 0 auto !important;
+  padding-bottom: 2px !important;
+  opacity: .92 !important;
+}
+
+.page[data-page="swipe"] .swipe-prog {
+  margin: 10px 0 0 !important;
+  height: 14px !important;
+  padding: 0 24px !important;
+  flex: 0 0 auto !important;
+}
+
+/* ---------------- 4. 暂停态中央徽标（图三） ---------------- */
+.page[data-page="swipe"] .swipe-cover {
+  position: relative !important;
+}
+
+.page[data-page="swipe"] .swipe-pause-badge {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 74px !important;
+  height: 74px !important;
+  margin: -37px 0 0 -37px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, .16) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.5) !important;
+  backdrop-filter: blur(16px) saturate(1.5) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22),
+              0 8px 26px rgba(0, 0, 0, .28) !important;
+  pointer-events: none !important;
+  opacity: 1 !important;
+  transform: scale(1) !important;
+  transition: opacity .18s ease, transform .18s ease !important;
+}
+
+.page[data-page="swipe"] .swipe-pause-badge .icon {
+  width: 30px !important;
+  height: 30px !important;
+  margin-left: 3px !important;
+  color: #fff !important;
+  fill: currentColor !important;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, .35)) !important;
+}
+
+/* 播放中隐藏徽标 */
+.page[data-page="swipe"].playing .swipe-pause-badge {
+  opacity: 0 !important;
+  transform: scale(.86) !important;
+}

@@ -1,0 +1,144 @@
+/* ==========================================================================
+   v47 补丁（v3.16 三处反馈）
+   1. 刷歌页纵向间距：上部空白过大、底部过挤 → 封面适度放大吃掉中部空白，
+      进度条与按钮之间、按钮与卡片底之间各留呼吸位
+   2. 我的页：底部迷你播放条改为右下角漂浮播放球（可拖动，点击进播放页）
+   3. 我的页：去掉头像右下角“+”角标与昵称旁“改名”字样，直接点击即可修改
+   ========================================================================== */
+
+/* ---------------- 1. 刷歌页纵向节奏 ---------------- */
+/* 上一版把剩余空间全推给“进度条以上”，导致封面与进度条之间出现大断层。
+   这里：封面按视口轻微放大（吸收空白）、各元素间距统一 18px、
+   进度条不再贴按钮、按钮组不再贴卡片底。 */
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+  gap: 18px !important;
+  padding: 10px 0 0 !important;
+}
+
+.page[data-page="swipe"] .swipe-cover {
+  width: min(84vw, 336px, 40vh) !important;
+  margin-top: 0 !important;
+}
+
+/* 剩余空间留在进度条之上，进度条与按钮之间保留真实呼吸位（约 23px） */
+.page[data-page="swipe"] .swipe-prog {
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl {
+  margin-top: 0 !important;
+  margin-bottom: 24px !important;
+  padding-bottom: 0 !important;
+}
+
+/* 卡片底到 tabbar 之间不留“悬空”感：卡片自身补一点内边距 */
+.page[data-page="swipe"] .swipe-card {
+  padding-bottom: 0 !important;
+}
+
+/* ---------------- 2. 我的页：迷你条隐藏，改漂浮球 ---------------- */
+body[data-tab="mine"] #mini {
+  display: none !important;
+}
+
+.mini-ball {
+  position: fixed;
+  right: 16px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 74px);
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: none;
+  z-index: 66;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .30), 0 2px 6px rgba(0, 0, 0, .16);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  cursor: pointer;
+}
+
+body[data-tab="mine"] .mini-ball.show {
+  display: block;
+  animation: ballIn .22s ease-out both;
+}
+
+@keyframes ballIn {
+  from { opacity: 0; transform: scale(.72); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.mini-ball img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+/* 播放中封面缓慢旋转，一眼看出在放歌 */
+.mini-ball.playing img {
+  animation: spin 22s linear infinite;
+}
+
+.mini-ball.buffering {
+  opacity: .7;
+}
+
+.mini-ball .mini-ball-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .5);
+  pointer-events: none;
+}
+
+/* 中心播放/暂停遮罩：只在播放中半透明显示，静止时淡出 */
+.mini-ball .mini-ball-ico {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .26);
+  color: #fff;
+  opacity: 0;
+  transition: opacity .18s;
+  pointer-events: none;
+}
+
+.mini-ball.playing .mini-ball-ico,
+.mini-ball:active .mini-ball-ico {
+  opacity: 1;
+}
+
+.mini-ball .mini-ball-ico .icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.mini-ball.dragging {
+  transition: none;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .40);
+}
+
+/* ---------------- 3. 我的页头像 / 昵称：去掉角标与“改名” ---------------- */
+/* 元素已在模板里删除，这里兜底隐藏，防旧缓存残留 */
+.pc-avatar-edit,
+.pc-name-tag {
+  display: none !important;
+}
+
+/* 去掉角标后，头像与昵称的点击区域补上明确反馈 */
+.pc-avatar:active {
+  transform: scale(.94);
+}
+.pc-name:active .pc-name-txt {
+  opacity: .55;
+}

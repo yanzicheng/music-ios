@@ -1,0 +1,152 @@
+﻿/* ==========================================================================
+   v48 琛ヤ竵锛坴3.17锛?   1. 鍒锋瓕椤电旱鍚戣妭濂忚繑宸ワ細涓婁竴鐗堟妸鍓╀綑绌洪棿鍏ㄧ粰浜嗏€滃枩娆?鏀惰棌 鈫?杩涘害鏉♀€濓紝
+      閫犳垚涓婃柟鏂眰澶с€佹寜閽粍鍙堣创浣忓崱鐗囧簳锛堜笅绱т笂鏉撅級銆?      杩欓噷鏀逛负鈥滃墿浣欑┖闂翠笂涓嬪潎鍒嗏€濓細杩涘害鏉′笂鏂逛竴浠姐€佹帶鍒堕敭涓嬫柟涓€浠斤紝
+      灏侀潰閫傚綋鏀惧ぇ鍚告敹涓绌虹櫧锛屽簳閮ㄨ嚦灏戠暀 22px銆?   2. 鎴戠殑椤垫挱鏀惧櫒锛氳糠浣犳潯闅愯棌锛屽彸涓嬭婕傛诞鎾斁鐞冿紙鍙嫋鍔?鐐瑰嚮杩涙挱鏀鹃〉锛夈€?   3. 鎴戠殑椤靛ご鍍?鏄电О锛氬幓鎺夆€?鈥濊鏍囦笌鈥滄敼鍚嶁€濆瓧鏍凤紝鐩存帴鐐瑰嚮淇敼銆?   ========================================================================== */
+
+/* ---------------- 1. 鍒锋瓕椤电旱鍚戣妭濂?---------------- */
+.page[data-page="swipe"] .swipe-card {
+  padding-bottom: 0 !important;
+}
+
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  padding: 6px 0 0 !important;
+  height: 100% !important;
+}
+
+/* 灏侀潰锛氬悆鎺変腑娈电┖鐧斤紝浣嗕笉鑷充簬鎶婁笅鏂规尋璧?*/
+.page[data-page="swipe"] .swipe-cover {
+  width: min(94vw, 372px, 45vh) !important;
+  height: auto !important;
+  margin: 0 auto !important;
+  flex: 0 0 auto !important;
+}
+
+/* 涓夊鑷€傚簲绌虹櫧鍧囧垎锛堝皝闈⑩啋姝屽悕 / 鏀惰棌鈫掕繘搴︽潯 / 鎺у埗閿啋搴曪級锛?   閬垮厤鈥滀笂澶т笅灏忊€濈殑鏂眰锛氭瓕鍚嶄笌鏀惰棌涔嬮棿淇濇寔鍥哄畾 10px 鐨勭揣閭诲叧绯?*/
+.page[data-page="swipe"] .swipe-song {
+  margin: auto 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-actions {
+  margin: 10px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-prog {
+  margin: auto 0 0 !important;
+  height: 14px !important;
+  padding: 0 20px !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl {
+  margin: 14px 0 auto !important;
+  padding-bottom: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* ---------------- 2. 鎴戠殑椤碉細杩蜂綘鏉?鈫?婕傛诞鎾斁鐞?---------------- */
+body[data-tab="mine"] #mini,
+#mini.dock-hidden {
+  display: none !important;
+}
+
+.mini-ball {
+  position: fixed;
+  right: 14px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 78px);
+  width: 50px;
+  height: 50px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: none;
+  z-index: 68;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .32), 0 2px 6px rgba(0, 0, 0, .16);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+  cursor: pointer;
+}
+
+body[data-tab="mine"] .mini-ball.show {
+  display: block;
+  animation: ballIn .22s ease-out both;
+}
+
+@keyframes ballIn {
+  from { opacity: 0; transform: scale(.72); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.mini-ball img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.mini-ball.playing img {
+  animation: spin 22s linear infinite;
+}
+
+.mini-ball.buffering {
+  opacity: .7;
+}
+
+.mini-ball .mini-ball-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .5);
+  pointer-events: none;
+}
+
+.mini-ball .mini-ball-ico {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, .28);
+  color: #fff;
+  opacity: 0;
+  transition: opacity .18s;
+  pointer-events: none;
+}
+
+.mini-ball.playing .mini-ball-ico,
+.mini-ball:active .mini-ball-ico {
+  opacity: 1;
+}
+
+.mini-ball .mini-ball-ico .icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+.mini-ball.dragging {
+  transition: none;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, .40);
+}
+
+/* ---------------- 3. 鎴戠殑椤靛ご鍍?/ 鏄电О锛氬幓鎺夎鏍囦笌鈥滄敼鍚嶁€?---------------- */
+.pc-avatar-edit,
+.pc-name-tag {
+  display: none !important;
+}
+
+.pc-avatar:active {
+  transform: scale(.94);
+}
+
+.pc-name:active .pc-name-txt {
+  opacity: .55;
+}
+

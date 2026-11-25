@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Info.plist 需要补齐的键（静态参考副本）
+
+  说明：
+    - 正式生效的补丁是 hooks/ios-plist-patch.js（after_prepare 自动写入 platforms/ios/**/*-Info.plist）；
+    - 本文件只是「同一份改动」的可读版本，用于：
+        · 手工在 Xcode 里改工程时对照
+        · 想改成其它值（例如不要 AllowArbitraryLoads）时先在这里改清楚，再同步到 hook 脚本
+    - 直接把下面 <dict> 内的片段粘贴到目标 Info.plist 的根 <dict> 末尾即可（注意不要重复已有的 key）。
+-->
+<plist version="1.0">
+<dict>
+
+    <!-- 桌面显示名。widget name 故意用 ASCII（MusicPlayer）以稳定工程名与 scheme，
+         中文显示名放在这里，避免 CI 命令行引用中文目标出错 -->
+    <key>CFBundleDisplayName</key>
+    <string>音乐</string>
+
+    <!-- 允许 WebView 访问本地回环的明文 HTTP（内嵌 Node 服务 http://127.0.0.1:34200）。
+         NSAllowsArbitraryLoads 是兜底；NSAllowsLocalNetworking 与例外域覆盖 localhost 场景。
+         自用包，不追求 App Store 审核口径；若要上架需改回按域名精确例外。 -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <true/>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+        <key>NSExceptionDomains</key>
+        <dict>
+            <key>localhost</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+                <key>NSIncludesSubdomains</key>
+                <true/>
+            </dict>
+            <key>127.0.0.1</key>
+            <dict>
+                <key>NSExceptionAllowsInsecureHTTPLoads</key>
+                <true/>
+            </dict>
+        </dict>
+    </dict>
+
+    <!-- 后台音频：必须含 audio，否则切后台/锁屏即停 -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>audio</string>
+    </array>
+
+    <!-- 让「文件」App 能看到 App 文档目录（塞本地歌曲、导出歌单） -->
+    <key>UIFileSharingEnabled</key>
+    <true/>
+    <key>LSSupportsOpeningDocumentsInPlace</key>
+    <true/>
+
+    <!-- 仅竖屏，对齐安卓 AndroidManifest 的 screenOrientation=portrait -->
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+
+    <!-- 仅使用系统 HTTPS 访问远程，声明非豁免加密（免去上传时的合规询问） -->
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+
+</dict>
+</plist>

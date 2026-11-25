@@ -1,0 +1,278 @@
+/* ===========================================================
+   v3.3 改造（在 app.css / qq3.css 之后加载，负责覆盖）
+   1) 首页快捷入口：白卡 + 多色插画图标（差异化，去高饱和大色块）
+   2) 乐馆入口：白卡 + 浅色图标底色（与首页插画区分）
+   3) 刷歌页：汽水音乐式沉浸单曲页（模糊封面铺底 + 暗色渐变 + 居中封面）
+   4) 音质档位：命名对齐汽水（标准 / 较高 / 无损 / Hi-Res）
+   =========================================================== */
+
+/* ---------------- 1. 首页快捷入口 ---------------- */
+.quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+.quick-grid button.quick {
+  padding: 0;
+  gap: 8px;
+}
+.quick-grid button.quick > .quick-ico {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(17, 24, 39, .07), 0 1px 2px rgba(17, 24, 39, .04);
+  border: .5px solid rgba(17, 24, 39, .04);
+}
+/* 覆盖 app.css 的四个大色块底板 */
+.quick-grid button.quick:nth-child(1) > .quick-ico,
+.quick-grid button.quick:nth-child(2) > .quick-ico,
+.quick-grid button.quick:nth-child(3) > .quick-ico,
+.quick-grid button.quick:nth-child(4) > .quick-ico {
+  background: #ffffff;
+  box-shadow: 0 6px 16px rgba(17, 24, 39, .07), 0 1px 2px rgba(17, 24, 39, .04);
+}
+.qart {
+  width: 34px;
+  height: 34px;
+  display: block;
+}
+.quick-grid .quick-name {
+  font-size: 12px;
+  color: var(--text-2);
+  line-height: 1;
+}
+.quick-grid button.quick.pressed > .quick-ico {
+  transform: scale(.94);
+  transition: transform .12s;
+}
+
+/* ---------------- 2. 乐馆入口 ---------------- */
+.hall-grid { gap: 10px; }
+.hall-item {
+  background: #fff;
+  border-radius: 15px;
+  padding: 13px 4px 12px;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, .05);
+  border: .5px solid rgba(17, 24, 39, .04);
+}
+.hall-chip {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  background: #eef2f7;
+  color: #6b7280;
+}
+.hall-chip .icon { width: 20px; height: 20px; color: currentColor; }
+.hall-chip.tone-green  { background: #e8f9f1; color: #17b26a; }
+.hall-chip.tone-blue   { background: #ecf2ff; color: #4b7bff; }
+.hall-chip.tone-violet { background: #f1ecff; color: #7c5cff; }
+.hall-chip.tone-amber  { background: #fff4e5; color: #f79009; }
+.hall-chip.tone-pink   { background: #ffeef2; color: #ff4d6d; }
+.hall-chip.tone-cyan   { background: #e6f8fb; color: #06aed4; }
+.hall-item .hall-name { font-size: 12.5px; color: var(--text); line-height: 1; }
+
+/* ---------------- 3. 刷歌页：沉浸式单曲 ---------------- */
+.page[data-page="swipe"] { background: #0b0d10; color: #fff; }
+
+/* 刷歌页时底栏跟随暗色 */
+body[data-tab="swipe"] #tabbar {
+  background: rgba(11, 13, 16, .92);
+  border-top: .5px solid rgba(255, 255, 255, .07);
+}
+body[data-tab="swipe"] #tabbar .tab { color: rgba(255, 255, 255, .42); }
+body[data-tab="swipe"] #tabbar .tab.active { color: #fff; }
+
+.swipe-head {
+  padding: calc(var(--safe-t) + 12px) 18px 2px;
+}
+.swipe-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, .62);
+}
+.swipe-refresh {
+  color: rgba(255, 255, 255, .5);
+  font-size: 12px;
+}
+.swipe-refresh .icon { width: 14px; height: 14px; }
+
+.swipe-scroll {
+  padding: 0 18px calc(var(--tab-h) + var(--safe-b) + 6px);
+  touch-action: pan-x;
+}
+.swipe-card {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0;
+  overflow: hidden;
+}
+/* 模糊封面铺满 */
+.swipe-bg {
+  position: absolute;
+  inset: -70px -18px 0 -18px;
+  border-radius: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(48px) saturate(1.45) brightness(.72);
+  transform: scale(1.15);
+  opacity: .8;
+  pointer-events: none;
+}
+/* 暗色渐变遮罩 */
+.swipe-veil {
+  position: absolute;
+  inset: -70px -18px 0 -18px;
+  background:
+    linear-gradient(180deg, rgba(9, 11, 14, .72) 0%, rgba(9, 11, 14, .3) 38%, rgba(8, 10, 13, .82) 100%);
+  pointer-events: none;
+}
+.swipe-main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 8px 0 0;
+}
+.swipe-cover {
+  width: min(62vw, 250px);
+  aspect-ratio: 1 / 1;
+  border-radius: 22px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .06);
+  box-shadow: 0 26px 52px rgba(0, 0, 0, .5);
+  border: 0;
+  padding: 0;
+  display: block;
+  outline: 0;
+}
+.swipe-cover:active { transform: scale(.985); }
+.swipe-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.swipe-song {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 0 8px;
+}
+.swipe-name {
+  max-width: 88%;
+  font-size: 19px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+  letter-spacing: .2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.swipe-singer {
+  max-width: 88%;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, .55);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.swipe-prog { width: 100%; padding: 0 8px; margin: 0; }
+.swipe-prog-bar { height: 2px; border-radius: 2px; background: rgba(255, 255, 255, .16); overflow: hidden; }
+.swipe-prog-bar i { display: block; height: 100%; width: 0; border-radius: 2px; background: #fff; transition: width .12s linear; }
+.swipe-prog-t {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 7px;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, .45);
+  font-variant-numeric: tabular-nums;
+}
+
+.swipe-ctrl {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+}
+.swipe-ctrl .sctrl {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  color: #fff;
+}
+.swipe-ctrl .sctrl .icon { width: 21px; height: 21px; color: rgba(255, 255, 255, .8); }
+.swipe-ctrl .sctrl.main {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .13);
+  border: 1px solid rgba(255, 255, 255, .2);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: none;
+}
+.swipe-ctrl .sctrl.main .icon { width: 24px; height: 24px; color: #fff; }
+.swipe-ctrl .sctrl:active { transform: scale(.93); }
+
+.swipe-side {
+  position: absolute;
+  right: 0;
+  top: 42%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+.side-btn {
+  width: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: rgba(255, 255, 255, .82);
+  font-size: 9.5px;
+  line-height: 1;
+}
+.side-btn .icon { width: 24px; height: 24px; color: rgba(255, 255, 255, .88); }
+.side-btn.on { color: #ff5a76; }
+.side-btn.on .icon { color: #ff5a76; fill: rgba(255, 90, 118, .9); }
+.side-btn:active { transform: scale(.92); }
+
+.swipe-hint {
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 9.5px;
+  letter-spacing: .3px;
+  color: rgba(255, 255, 255, .26);
+  padding: 10px 0 2px;
+}
+
+.page[data-page="swipe"] .loading,
+.page[data-page="swipe"] .empty { color: rgba(255, 255, 255, .55); }
+
+/* ---------------- 4. 音质档位（对齐汽水命名） ---------------- */
+#qList .q-main b { font-size: 14.5px; }
+#qList .q-main i { font-size: 11.5px; color: var(--sub); }
+#qList .q-row .q-radio { transition: background .16s, border-color .16s; }

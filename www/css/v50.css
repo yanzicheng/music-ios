@@ -1,0 +1,48 @@
+/* ==========================================================================
+   v50 补丁（v3.18）
+   刷歌页纵向节奏重排：用户反馈"上下太紧凑、中间空隙太大"。
+   做法：只把空白留给卡片上下两端，中间文案组全部收紧，封面适度回收，
+   让内容块在卡片里真正居中、四周透气。
+     · 上留白 / 下留白：各约 108px（v49 为 91/90）
+     · 封面→歌名 20px、歌名→收藏 10px、收藏→进度条 18px、进度条→控制键 16px
+   ========================================================================== */
+
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  height: 100% !important;
+}
+
+/* 封面：第一个 auto 吸收上半段剩余空白，自身略回收换取上下呼吸位 */
+.page[data-page="swipe"] .swipe-cover {
+  width: min(88vw, 320px, 38vh) !important;
+  height: auto !important;
+  margin: auto auto 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* 文案组：与封面贴近，组内一气呵成 */
+.page[data-page="swipe"] .swipe-song {
+  margin: 20px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-actions {
+  margin: 10px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-prog {
+  margin: 18px 0 0 !important;
+  height: 14px !important;
+  padding: 0 20px !important;
+  flex: 0 0 auto !important;
+}
+
+/* 控制键：第二个 auto 落在它下方，空白全给卡片底部 */
+.page[data-page="swipe"] .swipe-ctrl {
+  margin: 16px 0 auto !important;
+  padding-bottom: 0 !important;
+  flex: 0 0 auto !important;
+}

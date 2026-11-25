@@ -1,0 +1,120 @@
+/* ==========================================================================
+   v3.8
+   1) 歌词逐字跟唱：从「整字跳亮」改为「字符内渐变推进」
+      旧版把连续位置取整，字一进入就整字变白（等于永远提前半字），叠加 pace 偏快，
+      表现就是"字跑在人声前面、跳得太快对不上"。
+      现在每个字带 --cp（0~100 的已唱百分比），字内用渐变边界平滑爬行，
+      与音频时间线性对应，肉眼看到的就是"一个字正在被唱亮"。
+   2) 刷歌页进度条可拖动：补上滑块与拖动热区（原来只有一条纯展示的填充）。
+   ========================================================================== */
+
+/* ---------------- 1. 歌词逐字平滑填充 ---------------- */
+#player .lyric-line {
+  --ly-on: rgba(255, 255, 255, .96);
+  --ly-off: rgba(255, 255, 255, .30);
+}
+
+/* 已唱完的行整体柔化，不再抢当前行 */
+#player .lyric-line.sung {
+  --ly-on: rgba(255, 255, 255, .58);
+  --ly-off: rgba(255, 255, 255, .26);
+}
+
+#player .lyric-line .lyric-txt .k,
+#player .lyric-line.active .lyric-txt .k,
+#player .lyric-line .lyric-txt .k.on,
+#player .lyric-line.active .lyric-txt .k.on,
+#player .lyric-line .lyric-txt .k.cur,
+#player .lyric-line.sung .lyric-txt .k.on,
+#player .lyric-line.active .lyric-txt .k.cur {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+  text-shadow: none !important;
+  background-image: linear-gradient(90deg,
+    var(--ly-on) 0,
+    var(--ly-on) calc(var(--cp, 0) * 1%),
+    var(--ly-off) calc(var(--cp, 0) * 1%),
+    var(--ly-off) 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+/* 当前行轻微辉光：只作用于正在唱的一行，不影响滚动性能 */
+#player .lyric-line.active .lyric-txt {
+  filter: drop-shadow(0 0 6px rgba(120, 255, 190, .18));
+}
+
+/* ---------------- 2. 刷歌页进度条可拖动 ---------------- */
+.swipe-prog-bar {
+  position: relative;
+  overflow: visible !important;
+  height: 4px !important;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, .12) !important;
+  touch-action: none;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 上下各扩 14px 的隐形热区，手指好按 */
+.swipe-prog-bar::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  right: -8px;
+  top: -14px;
+  bottom: -14px;
+}
+
+.swipe-prog-bar i {
+  border-radius: 3px;
+  transition: width .12s linear;
+}
+
+.swipe-prog-bar.dragging i {
+  transition: none;
+}
+
+.swipe-knob {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--green, #22c55e);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .28);
+  transform: scale(.82);
+  opacity: 0;
+  transition: transform .14s ease, opacity .14s ease;
+  pointer-events: none;
+}
+
+/* 有播放进度时常显，拖动时放大，明确"这里能拖" */
+.swipe-knob {
+  opacity: 1;
+}
+
+.swipe-prog-bar.dragging .swipe-knob {
+  opacity: 1;
+  transform: scale(1.24);
+}
+
+/* 播放页进度条：拖动时滑块放大，给出跟手反馈 */
+#player #bar {
+  touch-action: none;
+}
+
+#player #bar.dragging .bar-knob {
+  transform: scale(1.3);
+}
+
+#player #bar.dragging .bar-fill,
+#player #bar.dragging .bar-knob {
+  transition: none !important;
+}

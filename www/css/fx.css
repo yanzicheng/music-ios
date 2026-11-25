@@ -1,0 +1,226 @@
+/* ===========================================================
+   音效面板样式（对齐 QQ音乐 音效页）
+   =========================================================== */
+
+#fxPanel {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.4, 0, .2, 1);
+  will-change: transform;
+}
+#fxPanel.open { transform: translateX(0); }
+
+.fx-reset {
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.fx-body {
+  padding: 4px 14px calc(var(--safe-b) + 30px);
+}
+
+/* 开关行 */
+.fx-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.fx-switch-txt { flex: 1; min-width: 0; }
+.fx-switch-txt b { display: block; font-size: 14.5px; font-weight: 600; }
+.fx-switch-txt span { display: block; margin-top: 3px; font-size: 11.5px; color: var(--sub); }
+
+.fx-switch {
+  width: 46px;
+  height: 27px;
+  border-radius: 14px;
+  border: 0;
+  background: #d9dee5;
+  position: relative;
+  flex-shrink: 0;
+  transition: background .2s;
+}
+.fx-switch i {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .18);
+  transition: transform .2s;
+}
+.fx-switch[aria-pressed="true"] { background: var(--green); }
+.fx-switch[aria-pressed="true"] i { transform: translateX(19px); }
+
+/* 分区 */
+.fx-section {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.fx-h {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.fx-h-sub {
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--green);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 预设 chips */
+.fx-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.fx-chip {
+  height: 31px;
+  padding: 0 14px;
+  border-radius: 16px;
+  border: 0;
+  background: #f2f4f7;
+  color: var(--text-2);
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+.fx-chip.on {
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 600;
+}
+
+/* EQ 曲线 */
+.fx-curve {
+  width: 100%;
+  height: 74px;
+  display: block;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fafbfc, #f4f6f9);
+}
+
+/* 10 段推子 */
+.fx-eq {
+  display: flex;
+  gap: 2px;
+  justify-content: space-between;
+}
+.fx-eq-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.fx-eq-val {
+  font-size: 10px;
+  color: var(--sub);
+  font-variant-numeric: tabular-nums;
+  height: 12px;
+  line-height: 12px;
+}
+.fx-eq-item input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 118px;
+  background: transparent;
+  outline: none;
+  /* 竖向推子：旋转后宽高互换，注意留出可点区域 */
+  transform: rotate(-90deg);
+  margin: 0;
+}
+.fx-eq-item input[type="range"]::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #e6eaf0;
+}
+.fx-eq-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--green);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
+}
+.fx-eq-lab {
+  font-size: 10px;
+  color: var(--sub);
+  white-space: nowrap;
+}
+.fx-eq-foot {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.fx-mini {
+  flex: 1;
+  height: 30px;
+  border-radius: 15px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* 横向滑杆 */
+.fx-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #e6eaf0;
+  outline: none;
+}
+.fx-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--green);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .16);
+}
+
+/* 保存自定义预设 */
+.fx-save {
+  width: 100%;
+  height: 38px;
+  border-radius: 19px;
+  border: 1px dashed var(--green);
+  background: var(--green-soft);
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.fx-custom .fx-chip { background: #f2f4f7; }
+.fx-empty { font-size: 11.5px; color: var(--sub); }
+
+/* 播放页「音效」按钮激活态 */
+#btnFx.b-on b { color: var(--green); }

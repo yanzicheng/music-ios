@@ -1,0 +1,160 @@
+/* ==========================================================================
+   v3.7
+   1) 歌词逐字填充：放弃「横向像素渐变裁切」，改为按字符 .k 上色。
+      像素渐变依赖 getBoundingClientRect 的 x 坐标，遇到折行 / letter-spacing /
+      缩放时，末字会落在渐变 100% 之外，出现"句末几个字始终是灰的"。
+      改成逐字上色后填充与文字排版无关，能在切行前把整句走满。
+   2) 刷歌页翻页：换成阅读方向的「顺势推入 + 纸页上翻」，方向与手势一致。
+   ========================================================================== */
+
+/* ---------------- 1. 歌词逐字填充 ---------------- */
+#player .lyric-line .lyric-txt {
+  background-image: none !important;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  -webkit-text-fill-color: currentColor;
+  /* 允许长句自然折行，不再被单行宽度裁掉句尾 */
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+#player .lyric-line.active .lyric-txt {
+  background-image: none !important;
+  -webkit-text-fill-color: currentColor !important;
+  color: rgba(255, 255, 255, .32);
+}
+
+/* 未唱字 */
+#player .lyric-line .k,
+#player .lyric-line.active .k {
+  color: rgba(255, 255, 255, .32) !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: none;
+  transition: color .10s linear, text-shadow .12s linear;
+}
+
+/* 已唱字 */
+#player .lyric-line.active .k.on,
+#player .lyric-line .k.on {
+  color: #fff !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: 0 0 6px rgba(255, 255, 255, .78), 0 0 15px rgba(120, 255, 190, .42);
+}
+
+/* 正在唱的这一个字：整字已点亮，用光晕强弱表现推进，避免半字裁切的锯齿感 */
+#player .lyric-line.active .k.cur {
+  color: #fff !important;
+  -webkit-text-fill-color: currentColor !important;
+  text-shadow: 0 0 5px rgba(255, 255, 255, .55), 0 0 11px rgba(120, 255, 190, .30);
+}
+
+/* 已唱过的行保持柔和白，不再回灰 */
+#player .lyric-line.sung .k.on {
+  color: rgba(255, 255, 255, .62) !important;
+  text-shadow: none;
+}
+
+/* ---------------- 2. 刷歌页翻页 ---------------- */
+/* v3.7.1：翻页容器独占纵向手势，禁止浏览器把滑动判成页面滚动/回弹（滚动一起手就会
+   cancel 触摸流，卡片只跟手一帧，观感即"推不动、卡一下"）。 */
+#swipeScroll,
+.page[data-page="swipe"] .swipe-scroll {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
+
+.swipe-card {
+  transform-origin: 50% 50%;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.swipe-card.dragging {
+  transition: none !important;
+}
+
+/* 旧页纸片：上翻（下一首） */
+@keyframes v37LeafUp {
+  0% {
+    transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1400px) translate3d(0, -14%, 0) rotateX(-92deg) scale(.972);
+    opacity: .06;
+  }
+}
+
+/* 旧页纸片：回翻（上一首） */
+@keyframes v37LeafDown {
+  0% {
+    transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1400px) translate3d(0, 14%, 0) rotateX(92deg) scale(.972);
+    opacity: .06;
+  }
+}
+
+/* 新页从底部/顶部顺势推入 */
+@keyframes v37PageInUp {
+  0% {
+    transform: translate3d(0, 22%, 0) scale(.972);
+    opacity: .72;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes v37PageInDown {
+  0% {
+    transform: translate3d(0, -22%, 0) scale(.972);
+    opacity: .72;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+}
+
+.swipe-card.page-in-up {
+  animation: v37PageInUp .44s cubic-bezier(.22, .68, .28, 1) both;
+}
+
+.swipe-card.page-in-down {
+  animation: v37PageInDown .44s cubic-bezier(.22, .68, .28, 1) both;
+}
+
+.swipe-leaf.leaf-up {
+  animation: v37LeafUp .46s cubic-bezier(.32, .72, .30, 1) forwards;
+  transform-origin: 50% 0%;
+}
+
+.swipe-leaf.leaf-down {
+  animation: v37LeafDown .46s cubic-bezier(.32, .72, .30, 1) forwards;
+  transform-origin: 50% 100%;
+}
+
+/* 翻页纸页与推入新页：提前提升到合成层，避免起翻首帧重绘抖动 */
+.swipe-leaf {
+  will-change: transform, opacity;
+  contain: layout paint;
+  pointer-events: none;
+}
+
+.swipe-card.page-in-up,
+.swipe-card.page-in-down {
+  will-change: transform, opacity;
+}

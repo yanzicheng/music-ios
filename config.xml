@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.chengying.music.ios" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>MusicPlayer</name>
+    <description>音乐播放器 iOS 移植版：Cordova 壳 + nodejs-mobile 内嵌 Node 服务端，与原安卓版共用同一套 ui-mobile 前端与 app/server 后端。</description>
+    <author email="dev@local" href="https://localhost/">音乐</author>
+
+    <!-- 页面入口：Bundle 内 www/index.html（ui-mobile 原样复制而来） -->
+    <content src="index.html" />
+
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-intent href="mailto:*" />
+    <allow-intent href="tel:*" />
+
+    <!-- 仅竖屏 -->
+    <preference name="Orientation" value="portrait" />
+
+    <!-- WebView 行为：与安卓 WebView 侧保持一致（内联播放、自动播放、无回弹） -->
+    <preference name="AllowInlineMediaPlayback" value="true" />
+    <preference name="MediaPlaybackRequiresUserAction" value="false" />
+    <preference name="DisallowOverscroll" value="true" />
+    <preference name="Fullscreen" value="false" />
+    <preference name="WKWebViewOnly" value="true" />
+    <preference name="SuppressesIncrementalRendering" value="false" />
+
+    <!-- 不要在 iOS 上启用页面的全屏滚动区域计算以外的额外缩放 -->
+    <preference name="EnableViewportScale" value="false" />
+
+    <engine name="ios" spec="^7.1.1" />
+
+    <!-- 内嵌 Node 插件：必须与 package.json 的 dependencies / cordova.plugins 保持一致。
+         插件强制在 www/nodejs-project/ 下查找 main.js，故该目录不可移到别处。 -->
+    <plugin name="@red-mobile/nodejs-mobile-cordova" spec="^3.4.2" />
+
+    <platform name="ios">
+        <preference name="deployment-target" value="13.0" />
+        <!-- 显示名为「音乐」：由 hooks/ios-plist-patch.js 写入 CFBundleDisplayName，
+             这里保持 widget name 为 ASCII，避免 Xcode 工程名 / scheme 出现中文导致 CI 命令行难以引用 -->
+        <preference name="MixedContentMode" value="always" />
+
+        <!-- 图标（占位图，替换时保持同名同尺寸即可） -->
+        <icon src="res/icon/ios/icon-20.png" width="20" height="20" />
+        <icon src="res/icon/ios/icon-40.png" width="40" height="40" />
+        <icon src="res/icon/ios/icon-58.png" width="58" height="58" />
+        <icon src="res/icon/ios/icon-60.png" width="60" height="60" />
+        <icon src="res/icon/ios/icon-80.png" width="80" height="80" />
+        <icon src="res/icon/ios/icon-87.png" width="87" height="87" />
+        <icon src="res/icon/ios/icon-120.png" width="120" height="120" />
+        <icon src="res/icon/ios/icon-152.png" width="152" height="152" />
+        <icon src="res/icon/ios/icon-167.png" width="167" height="167" />
+        <icon src="res/icon/ios/icon-180.png" width="180" height="180" />
+        <icon src="res/icon/ios/icon-1024.png" width="1024" height="1024" />
+
+        <!-- 启动图（cordova-ios 6+ 默认使用 LaunchScreen.storyboard，这里提供通用尺寸占位） -->
+        <splash src="res/screen/ios/Default@2x~universal~anyany.png" />
+        <splash src="res/screen/ios/Default@1x~universal~anyany.png" />
+    </platform>
+
+    <!-- Info.plist 补齐（ATS / 后台音频 / 文件共享 / 竖屏），幂等执行 -->
+    <hook type="after_prepare" src="hooks/ios-plist-patch.js" />
+</widget>

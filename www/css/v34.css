@@ -1,0 +1,145 @@
+/* ==========================================================================
+   v3.4 修复样式（对照汽水音乐）
+   A 歌词逐字填充跟唱：当前行放大居中 + 白字渐变裁切填充，其余行降透明
+   B 同屏重名导航清理后的排版微调（刷歌页头部仅留换一批）
+   C 刷歌页右侧操作栏：喜欢/收藏/下载/更多 固定顺序 + 统一尺寸与间距
+   D 刷歌页上下滑：拖动跟随的卡片位移/缩放/淡出与进场动效
+   引入位置：index.html 中最后一个 <link>，覆盖此前所有样式
+   ========================================================================== */
+
+/* ---------------- A. 歌词：汽水式逐字填充 ---------------- */
+#player .lyric-list {
+  /* 关闭原生平滑滚动，改由 JS 缓动滚动，避免两者互相打断 */
+  scroll-behavior: auto;
+  padding: 42px 0;
+}
+#player .lyric-line {
+  position: relative;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+  padding: 7px 18px;
+  opacity: 1;
+  transform: none;
+  color: rgba(255, 255, 255, .30);
+  transition: color .26s ease, font-size .26s ease, opacity .26s ease;
+}
+#player .lyric-line .lyric-txt {
+  display: inline-block;
+  max-width: 100%;
+  letter-spacing: .3px;
+  /* 默认（未唱行）用普通文字色，只有当前行走渐变裁切填充 */
+  -webkit-text-fill-color: currentColor;
+}
+/* 当前行：放大、纯白、居中（滚动居中由 JS 缓动完成） */
+#player .lyric-line.active {
+  font-size: 19.5px;
+  font-weight: 700;
+  color: #fff;
+  opacity: 1;
+  transform: none;
+}
+#player .lyric-line.active .lyric-txt {
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  transition: none;
+}
+/* 已唱/未唱由 JS 写入的 linear-gradient 直接表现，禁止字符级颜色插值打架 */
+#player .lyric-line.active .k,
+#player .lyric-line.active .k.on {
+  color: transparent !important;
+  text-shadow: none !important;
+  transition: none;
+}
+/* 旧的整行扫光条不再使用 */
+#player .lyric-line.active::after { display: none; }
+/* 非当前行不再抢视觉 */
+#player .lyric-line:not(.active) .lyric-txt { background-image: none !important; }
+#player .lyric-line.has-tr .tr { color: rgba(255, 255, 255, .5); }
+#player .lyric-line.active.has-tr .tr {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, .62);
+  -webkit-text-fill-color: currentColor;
+}
+
+/* ---------------- B. 刷歌页头部：标题已删除，按钮右对齐 ---------------- */
+.swipe-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: calc(var(--safe-t) + 10px) 18px 0;
+  min-height: calc(var(--safe-t) + 26px);
+}
+.swipe-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  color: rgba(255, 255, 255, .55);
+  font-size: 12px;
+}
+
+/* ---------------- C. 刷歌页右侧操作栏：固定顺序与统一尺寸 ---------------- */
+#swipeScroll .swipe-side {
+  position: absolute;
+  right: 8px;
+  top: 42%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 16px;               /* 四项等距 */
+  z-index: 3;
+}
+#swipeScroll .side-btn {
+  width: 46px;             /* 图标 26 + 左右留白，四项完全等宽等高 */
+  height: 46px;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .10);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 9.5px;
+  line-height: 1;
+  transition: background .18s ease, transform .18s ease;
+}
+#swipeScroll .side-btn .icon {
+  width: 22px;
+  height: 22px;
+  color: rgba(255, 255, 255, .94);
+}
+#swipeScroll .side-btn span {
+  display: block;
+  font-size: 9.5px;
+  letter-spacing: .2px;
+  color: rgba(255, 255, 255, .88);
+}
+#swipeScroll .side-btn.on { color: #ff5a76; }
+#swipeScroll .side-btn.on .icon { color: #ff5a76; }
+#swipeScroll .side-btn.on span { color: #ff5a76; }
+#swipeScroll .side-btn:active { transform: scale(.92); background: rgba(255, 255, 255, .18); }
+
+/* ---------------- D. 上下滑翻页：拖动与进出场 ---------------- */
+#swipeScroll { touch-action: pan-x; }
+#swipeScroll .swipe-card {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+#swipeScroll .swipe-card.dragging {
+  transition: none !important;
+}
+.swipe-hint {
+  color: rgba(255, 255, 255, .22);
+}

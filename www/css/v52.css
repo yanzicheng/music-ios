@@ -1,0 +1,122 @@
+/* ==========================================================================
+   v53 补丁（v3.21）
+   仿首页播放页结构重排刷歌页：歌名在上、海报居中、歌词在下；
+   纵向节奏：上留白吸收于 swipe-head 之下，封面回收一档腾空间给歌名区，
+   歌词区仍为封面下方的独立段，不遮挡封面图案。
+   ========================================================================== */
+
+/* ---------------- 1. 歌名 + 歌手：置顶标题行 ---------------- */
+.page[data-page="swipe"] .swipe-song {
+  margin: 6px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-name {
+  font-size: 17.5px !important;
+  font-weight: 700 !important;
+}
+
+.page[data-page="swipe"] .swipe-singer {
+  font-size: 12.5px !important;
+  color: var(--text-2) !important;
+}
+
+/* ---------------- 2. 海报：居中，略缩一档让出上方歌名区 ---------------- */
+.page[data-page="swipe"] .swipe-cover {
+  width: min(88vw, 300px, 28vh) !important;
+  height: auto !important;
+  margin: 6px auto 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* ---------------- 3. 歌词区：封面下方独立成段 ---------------- */
+.page[data-page="swipe"] .swipe-lyric {
+  position: relative !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  top: auto !important;
+  width: min(88vw, 300px, 28vh) !important;
+  height: 88px !important;
+  margin: 10px auto 0 !important;
+  border-radius: 16px !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  z-index: 1 !important;
+  flex: 0 0 auto !important;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, .02) 0%,
+    rgba(255, 255, 255, .06) 100%) !important;
+  -webkit-backdrop-filter: blur(2px) !important;
+  backdrop-filter: blur(2px) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05) !important;
+}
+
+.page[data-page="swipe"] .swipe-lyric-box {
+  height: 100% !important;
+  padding: 8px 14px !important;
+  overflow: hidden !important;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%) !important;
+  mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 86%, transparent 100%) !important;
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line {
+  font-size: 13.5px !important;
+  line-height: 20px !important;
+  padding: 2px 0 !important;
+}
+
+/* ---------------- 4. 纵向节奏：其余元素顺延 ---------------- */
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  height: 100% !important;
+}
+
+.page[data-page="swipe"] .swipe-actions {
+  margin: 10px 0 0 !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-prog {
+  margin: 14px 0 0 !important;
+  height: 14px !important;
+  padding: 0 20px !important;
+  flex: 0 0 auto !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl {
+  margin: 12px 0 auto !important;
+  padding-bottom: 0 !important;
+  flex: 0 0 auto !important;
+}
+
+/* ---------------- 5. 歌词区可读性 ---------------- */
+.page[data-page="swipe"] .swipe-lyric .lyric-line {
+  --ly-off: rgba(255, 255, 255, .56);
+  color: var(--ly-off);
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line.sung {
+  --ly-on: rgba(255, 255, 255, .78);
+  --ly-off: rgba(255, 255, 255, .40);
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line.active {
+  color: #fff;
+  text-shadow: 0 1px 10px rgba(255, 255, 255, .18);
+}
+
+.page[data-page="swipe"] .swipe-lyric .lyric-line.active .lyric-txt {
+  font-weight: 600;
+  letter-spacing: .2px;
+}
+
+.page[data-page="swipe"] .swipe-lyric {
+  background-image: linear-gradient(180deg,
+    rgba(255, 255, 255, .03) 0%,
+    rgba(255, 255, 255, .07) 100%) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07),
+              0 6px 18px rgba(0, 0, 0, .12) !important;
+}

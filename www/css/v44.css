@@ -1,0 +1,210 @@
+/* ==========================================================================
+   v44：本轮（v3.14）按用户 4 张截图返工
+   1. 刷歌页进度条不再溢出/贴屏幕边（左右强制留白 + 视口宽度兜底）
+   2. 刷歌页上一首/下一首/播放键整组下移到卡片底部
+   3. 中间播放键与左右两侧按钮完全同款配色（同一底色、无边框、无阴影、无非透明修饰）
+   4. 首页迷你播放器进度条下移到背景底边
+   ========================================================================== */
+
+/* ---------------- 1. 刷歌页进度条：左右留白，绝不贴边 ---------------- */
+.page[data-page="swipe"] .swipe-scroll {
+  padding-left: 18px !important;
+  padding-right: 18px !important;
+}
+
+.page[data-page="swipe"] .swipe-prog {
+  width: 100% !important;
+  max-width: calc(100vw - 40px) !important;
+  box-sizing: border-box !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 0 !important;
+  margin-bottom: 4px !important;
+  padding: 0 20px !important;
+}
+
+.page[data-page="swipe"] .swipe-prog-bar,
+.page[data-page="swipe"] .swipe-prog-t {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 进度小球在 100% 位置时会向外探出 6px，给容器留出溢出空间而不是压缩轨道 */
+.page[data-page="swipe"] .swipe-prog {
+  overflow: visible !important;
+}
+
+/* ---------------- 2. 控制键整组下移，贴近卡片底部 ---------------- */
+.page[data-page="swipe"] .swipe-main {
+  justify-content: flex-start !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl {
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 16px !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+/* 上侧留少量固定留白，剩余空间全部给控制键，实现"整组下移" */
+.page[data-page="swipe"] .swipe-cover {
+  margin-top: 12px !important;
+}
+
+/* ---------------- 3. 播放键与上一首/下一首完全同款 ---------------- */
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main:active,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main:focus,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.swipe-playbtn {
+  background: rgba(255, 255, 255, .12) !important;
+  background-image: none !important;
+  background-color: rgba(255, 255, 255, .12) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: #fff !important;
+  width: 52px !important;
+  height: 52px !important;
+  flex: 0 0 52px !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main::before,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main::after,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.swipe-playbtn::before,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.swipe-playbtn::after {
+  content: none !important;
+  display: none !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main:active {
+  background: rgba(255, 255, 255, .22) !important;
+  transform: scale(.94);
+}
+
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main .icon {
+  color: #fff !important;
+  fill: currentColor;
+  filter: none !important;
+  width: 21px !important;
+  height: 21px !important;
+}
+
+/* 侧键同步成 52px 才与中间键同高，避免视觉上中间键被"架空" */
+.page[data-page="swipe"] .swipe-ctrl .sctrl {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+/* 播放详情页的播放/暂停键：同样去掉白描边与玻璃高光，与上一首/下一首同款底色 */
+#player #btnPlay,
+#player.playing #btnPlay,
+#player .p-play,
+#player.playing .p-play {
+  background: rgba(255, 255, 255, .10) !important;
+  background-image: none !important;
+  background-color: rgba(255, 255, 255, .10) !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  color: #fff !important;
+}
+
+#player #btnPlay::before,
+#player #btnPlay::after,
+#player .p-play::before,
+#player .p-play::after {
+  content: none !important;
+  display: none !important;
+  border: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+#player #btnPlay:active,
+#player .p-play:active {
+  background: rgba(255, 255, 255, .20) !important;
+  transform: scale(.94);
+}
+
+#player #btnPlay .icon,
+#player.playing #btnPlay .icon,
+#player .p-play .icon {
+  color: #fff !important;
+  fill: currentColor;
+  filter: none !important;
+  opacity: 1;
+  width: 22px !important;
+  height: 22px !important;
+}
+
+#player #btnPlay.loading .icon,
+#player .p-play.loading .icon {
+  opacity: .55 !important;
+}
+
+#player #btnPlay .mv-ripple,
+#player .p-play .mv-ripple {
+  background: radial-gradient(circle, rgba(255, 255, 255, .26) 0%, rgba(255, 255, 255, .12) 45%, rgba(255, 255, 255, 0) 72%) !important;
+}
+
+/* ---------------- 4. 首页迷你条进度条贴到背景底边 ---------------- */
+/* 直接绝对定位到迷你条底边：不受父容器 padding / flex 影响 */
+#mini .mini-progress,
+#mini.idle .mini-progress {
+  position: absolute !important;
+  left: 10px !important;
+  right: 10px !important;
+  bottom: 3px !important;
+  top: auto !important;
+  width: auto !important;
+  height: 3px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  box-sizing: border-box !important;
+  background: rgba(255, 255, 255, .20) !important;
+  border-radius: 999px !important;
+  overflow: visible !important;
+  touch-action: none;
+}
+
+/* 原轨道伪元素隐藏，避免与容器底双重叠加 */
+#mini .mini-progress::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* 拖动热区：向外扩展 9px 方便手指按住，不影响视觉位置 */
+#mini .mini-progress::after {
+  content: '' !important;
+  display: block !important;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -9px;
+  bottom: -9px;
+  background: transparent;
+}
+
+#mini #miniBar {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: linear-gradient(90deg, #6ee7b7 0%, #34d399 100%) !important;
+}

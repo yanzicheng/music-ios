@@ -1,0 +1,30 @@
+/* ==========================================================================
+   v46 补丁（v3.15 返工）
+   刷歌页：进度条与下方控制键之间仍有大片空白。
+   根因：.swipe-prog 容器里还留着 .swipe-prog-t（时间行，高 15px + 上边距 7px），
+   它把“轨道 ↔ 按钮”的净间距撑到 ~30px，仅靠负 margin 压不动。
+   处理：刷歌页隐藏时间行、容器收紧到 14px，轨道整体下移，净间距收到 8px。
+   ========================================================================== */
+
+/* ---------- 刷歌页：进度条贴紧控制键 ---------- */
+.page[data-page="swipe"] .swipe-prog {
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
+  padding: 0 20px !important;
+  height: 14px !important;
+  display: flex !important;
+  align-items: flex-start !important;
+  overflow: visible !important;
+}
+
+/* 刷歌页不显示时间行（时长信息在播放页与迷你条上均可查看），
+   它是空隙的真正来源，隐藏后轨道才能贴上去 */
+.page[data-page="swipe"] .swipe-prog-t {
+  display: none !important;
+}
+
+.page[data-page="swipe"] .swipe-ctrl {
+  margin-top: -15px !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 16px !important;
+}

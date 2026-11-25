@@ -1,0 +1,396 @@
+/* ==========================================================================
+   v3.10
+   1) 播放页功能条（喜欢/下载/收藏/音质/歌词/定时）：去掉胶囊底色，全透明无背景。
+   2) 喜欢按钮：只亮红心，不再显示"已喜欢"文字。
+   3) 进度条：去掉流动流光，改磨砂奶白静态条（半透明 + 模糊 + 内高光）。
+   4) 播放键：去掉静态光晕与点击脉冲环，只留水波纹。
+   5) 首页迷你播放条：液态玻璃（多层半透明 + 强模糊 + 边缘高光 + 内阴影）。
+   6) 我的下载面板样式。
+   ========================================================================== */
+
+/* ---------------- 1. 播放页功能条：全透明，无背景 ---------------- */
+#player .p-actions {
+  margin: 4px 0 12px;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+#player .p-act {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* 去掉按钮背板时保留可点反馈：轻压 + 极淡高光 */
+#player .p-act:active {
+  background: rgba(255, 255, 255, .10);
+}
+
+/* ---------------- 2. 喜欢：纯红心，无"已喜欢"文字 ---------------- */
+#player #btnFav {
+  color: rgba(255, 255, 255, .88);
+}
+
+#player #btnFav.on {
+  color: #ff3b5c;
+}
+
+#player #btnFav.on .icon {
+  filter: drop-shadow(0 2px 6px rgba(255, 59, 92, .45));
+}
+
+/* ---------------- 3. 进度条：磨砂奶白静态条（不流动） ---------------- */
+#player .bar-line,
+.swipe-prog-bar {
+  background: rgba(255, 255, 255, .14) !important;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, .18), inset 0 0 0 1px rgba(255, 255, 255, .06) !important;
+  border-radius: 999px;
+}
+
+#player .bar-fill,
+.swipe-prog-bar i {
+  height: 4px !important;
+  border-radius: 999px;
+  background-image: linear-gradient(180deg,
+    rgba(255, 255, 255, .62) 0%,
+    rgba(255, 255, 255, .44) 46%,
+    rgba(255, 255, 255, .28) 100%) !important;
+  background-size: 100% 100% !important;
+  background-color: rgba(255, 255, 255, .30);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  backdrop-filter: blur(8px) saturate(1.1);
+  animation: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -1px 0 rgba(255, 255, 255, .16),
+    0 1px 2px rgba(0, 0, 0, .10) !important;
+}
+
+/* 取消高光扫过 */
+#player .bar-fill::after,
+.swipe-prog-bar i::after {
+  content: none !important;
+  animation: none !important;
+}
+
+/* 滑块：白玻璃小球，去掉绿色光环 */
+.bar-knob,
+.swipe-knob {
+  background: #fff;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, .30),
+    0 1px 4px rgba(0, 0, 0, .30) !important;
+}
+
+/* ---------------- 4. 播放键：无静态光晕、无脉冲环 ---------------- */
+#player.playing .p-play {
+  box-shadow:
+    0 8px 22px rgba(0, 0, 0, .30),
+    inset 0 1px 0 rgba(255, 255, 255, .85) !important;
+}
+
+#player .p-play.pulse::before,
+.swipe-ctrl .sctrl.main.pulse::before,
+.swipe-ctrl .sctrl.swipe-playbtn.pulse::before {
+  content: none !important;
+  animation: none !important;
+  border: 0 !important;
+}
+
+/* 水波纹本身是点击反馈，保留；仅把播放键波纹收敛一些 */
+#player .p-play .mv-ripple {
+  background: radial-gradient(circle,
+    rgba(0, 0, 0, .22) 0%,
+    rgba(0, 0, 0, .10) 42%,
+    rgba(0, 0, 0, 0) 72%);
+}
+
+/* ---------------- 5. 首页迷你播放条：液态玻璃 ---------------- */
+#mini,
+#mini.idle {
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, .82);
+  background:
+    linear-gradient(135deg,
+      rgba(255, 255, 255, .80) 0%,
+      rgba(255, 255, 255, .52) 32%,
+      rgba(255, 255, 255, .40) 60%,
+      rgba(255, 255, 255, .70) 100%);
+  -webkit-backdrop-filter: blur(28px) saturate(1.9) brightness(1.04);
+  backdrop-filter: blur(28px) saturate(1.9) brightness(1.04);
+  box-shadow:
+    0 12px 32px rgba(24, 34, 48, .22),
+    0 1px 2px rgba(24, 34, 48, .08),
+    inset 0 1px 0 rgba(255, 255, 255, .95),
+    inset 0 -1px 0 rgba(255, 255, 255, .45),
+    inset 0 -12px 20px rgba(255, 255, 255, .30);
+}
+
+/* 顶部液态高光弧 */
+#mini::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  top: 1px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, .78) 0%,
+    rgba(255, 255, 255, .28) 55%,
+    rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#mini .mini-main,
+#mini .mini-btn,
+#mini .mini-fav {
+  position: relative;
+  z-index: 1;
+}
+
+#mini .mini-cover {
+  border-radius: 10px;
+  box-shadow:
+    0 2px 8px rgba(24, 34, 48, .20),
+    inset 0 0 0 1px rgba(255, 255, 255, .65);
+  overflow: hidden;
+}
+
+#mini .mini-name {
+  color: #12161c;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .55);
+}
+
+#mini .mini-singer {
+  color: #5a616b;
+}
+
+#mini .mini-btn {
+  color: #1a1f26;
+}
+
+#mini .mini-progress {
+  background: rgba(24, 34, 48, .12) !important;
+}
+
+#mini #miniBar {
+  background: linear-gradient(90deg, rgba(26, 31, 38, .62), rgba(26, 31, 38, .40)) !important;
+}
+
+/* ---------------- 6. 我的下载面板 ---------------- */
+#dlPanel {
+  position: absolute;
+  inset: 0;
+  z-index: 44;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  transform: translateX(100%);
+  transition: transform .26s cubic-bezier(.4, 0, .2, 1);
+  will-change: transform;
+}
+
+#dlPanel.open {
+  transform: translateX(0);
+}
+
+#dlPanel .panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 12px calc(var(--safe-b) + 24px);
+}
+
+.dl-sum {
+  padding: 2px 16px 10px;
+  font-size: 12px;
+  color: var(--sub);
+  line-height: 1.45;
+  word-break: break-all;
+}
+
+.dl-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  margin-bottom: 8px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(24, 34, 48, .05);
+}
+
+.dl-row:active {
+  background: #f2f4f7;
+}
+
+.dl-ico {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--green-soft);
+  color: var(--green);
+}
+
+.dl-ico .icon {
+  width: 17px;
+  height: 17px;
+  fill: currentColor;
+}
+
+.dl-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.dl-name {
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dl-sub {
+  font-size: 11.5px;
+  color: var(--sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dl-del {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #b8bec8;
+  display: grid;
+  place-items: center;
+}
+
+.dl-del .icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+}
+
+.dl-del:active {
+  background: rgba(255, 59, 92, .10);
+  color: #ff3b5c;
+}
+
+.dl-empty {
+  padding: 40px 20px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--sub);
+  line-height: 1.8;
+}
+
+.dl-dir,
+.dl-dir-tip {
+  display: block;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #a4abb5;
+  word-break: break-all;
+}
+
+.dl-dir-tip {
+  padding: 6px 4px 0;
+  text-align: center;
+}
+
+/* ==========================================================================
+   v3.10.1 收口微调（按截图逐条返工）
+   a) 喜欢：实心红心，点亮时只留红心、不显示文字
+   b) 播放键/控制键：彻底去掉外发光光环，只留描边与玻璃底色
+   c) 迷你条与播放页：液态玻璃再压一层（高光弧 + 内阴影）
+   ========================================================================== */
+
+/* a) 喜欢按钮：实心红心（#i-heart-fill），点亮时只留红心 */
+#player #btnFav {
+  flex-direction: column;
+  gap: 3px;
+}
+
+#player #btnFav .icon {
+  width: 20px;
+  height: 20px;
+  fill: rgba(255, 255, 255, .92);
+  stroke: none;
+  color: rgba(255, 255, 255, .92);
+  transition: transform .18s cubic-bezier(.32, 1.4, .5, 1), fill .18s ease;
+}
+
+#player #btnFav.on .icon {
+  fill: #ff3b5c;
+  color: #ff3b5c;
+  transform: scale(1.06);
+}
+
+#player #btnFav:active .icon {
+  transform: scale(.90);
+}
+
+/* 点亮后隐藏文字，只留红心 */
+#player #btnFav.on span:not(.mi) {
+  display: none;
+}
+
+/* b) 去光环：两处播放器所有控制键取消外阴影/发光 */
+#player .p-play,
+#player.playing .p-play,
+#player .p-ctrl-btn,
+#player .p-icon-btn,
+#player .p-act,
+.swipe-ctrl .sctrl,
+.swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn,
+.mini-btn {
+  box-shadow: none !important;
+}
+
+/* 保留极轻的立体感：仅内高光，不含外扩散 */
+#player .p-play,
+#player.playing .p-play {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .80), inset 0 -1px 0 rgba(255, 255, 255, .22) !important;
+}
+
+.swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .30) !important;
+}
+
+/* 刷歌页侧键只留描边玻璃 */
+.swipe-ctrl .sctrl {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14) !important;
+}
+
+/* 任何脉冲环/外发光伪元素一律不出 */
+#player .p-play::before,
+#player .p-play::after,
+.swipe-ctrl .sctrl::before,
+.swipe-ctrl .sctrl::after {
+  content: none !important;
+  animation: none !important;
+  box-shadow: none !important;
+}

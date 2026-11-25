@@ -1,0 +1,104 @@
+/* ============================================================
+   v45 补丁（v3.15）
+   1. 刷歌页：进度条与下方控制键之间空隙过大 → 空白上移到进度条之上，
+      进度条与按钮之间只保留 8px
+   2. 播放模式按钮：图标由 JS 按当前模式切换（本文件只保证尺寸一致）
+   3. 我的页：头像/昵称支持自定义；右上角重复的“下载”入口已从 HTML 移除
+   ============================================================ */
+
+/* ---------- 1. 刷歌页：进度条贴近控制键 ---------- */
+/* v44 让 .swipe-ctrl 吃掉了全部剩余空间（margin-top:auto），
+   空白就全落在“进度条 ↔ 控制键”之间，观感上像断层。
+   这里改为让进度条吃掉剩余空间，控制键紧随其后。
+   注意 .swipe-main 自身还有 13px 的 flex gap，故用负 margin 兑掉一部分，
+   净间距 ~8px。 */
+.page[data-page="swipe"] .swipe-prog {
+  margin-top: auto !important;
+  margin-bottom: 0 !important;
+}
+.page[data-page="swipe"] .swipe-ctrl {
+  margin-top: -5px !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 16px !important;
+}
+
+/* ---------- 3. 我的页：头像 / 昵称可编辑 ---------- */
+.pc-avatar {
+  position: relative;
+  padding: 0 !important;
+  overflow: visible !important;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.pc-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: rgba(255, 255, 255, .22);
+}
+/* 默认 logo 是方形图标，用 contain 居中，塞满会变形 */
+.pc-avatar img.is-default {
+  width: 32px;
+  height: 32px;
+  margin: 11px;
+  object-fit: contain;
+  border-radius: 0;
+  background: transparent;
+}
+.pc-avatar-edit {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  background: #fff;
+  color: #23a967;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .28);
+  pointer-events: none;
+}
+.pc-avatar-edit .icon {
+  width: 12px;
+  height: 12px;
+  fill: currentColor;
+  stroke: currentColor;
+}
+.pc-avatar:active {
+  transform: scale(.96);
+}
+
+.pc-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.pc-name-txt {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pc-name-tag {
+  flex: none;
+  font-size: 10.5px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(255, 255, 255, .22);
+  border: 1px solid rgba(255, 255, 255, .34);
+  font-weight: 500;
+}
+.pc-name:active .pc-name-tag {
+  background: rgba(255, 255, 255, .34);
+}

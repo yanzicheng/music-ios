@@ -1,0 +1,265 @@
+/* ==========================================================================
+   v3.11（按本轮 4 张截图返工）
+   A. 按钮彻底平面化：播放键 / 控制键 / 图标键 / 功能键 / 刷歌页侧键
+      去掉内高光、外阴影、边框高光、图标投影 —— 只剩纯色底 + 纯色图标
+   B. 进度条：去掉白色流光与内高光，纯色平面条
+   C. 刷歌页喜欢：点过只留实心小红心，不显示文字
+   D. 播放键加载态：不再叠加旋转圈（歪圈/变形），图标保持不动
+   E. 下载列表：下载中 / 已下载 分组
+   ========================================================================== */
+
+/* ---------------- A. 平面化：所有播放器按钮 ---------------- */
+#player .p-play,
+#player.playing .p-play,
+#player .p-ctrl-btn,
+#player .p-icon-btn,
+#player .p-act,
+.swipe-ctrl .sctrl,
+.swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn,
+#mini .mini-btn,
+.sw-act {
+  background-image: none !important;
+  box-shadow: none !important;
+  text-shadow: none !important;
+  filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* 播放键：纯白平底，无立体感 */
+#player .p-play,
+#player.playing .p-play {
+  background: rgba(255, 255, 255, .92) !important;
+  border: 0 !important;
+  color: #14161a !important;
+}
+
+#player .p-play .icon {
+  filter: none !important;
+}
+
+/* 上一首 / 下一首：纯半透明平底 */
+#player .p-ctrl-btn,
+#player .p-icon-btn {
+  background: rgba(255, 255, 255, .10) !important;
+  border: 0 !important;
+  color: rgba(255, 255, 255, .92) !important;
+}
+
+#player .p-ctrl-btn:active,
+#player .p-icon-btn:active {
+  background: rgba(255, 255, 255, .20) !important;
+}
+
+#player .p-act {
+  background: transparent !important;
+  border: 0 !important;
+}
+
+/* 刷歌页侧键：同款平底 */
+.swipe-ctrl .sctrl,
+.swipe-ctrl .sctrl.main {
+  background: rgba(255, 255, 255, .12) !important;
+  border: 0 !important;
+  color: #fff !important;
+}
+
+.swipe-ctrl .sctrl:active {
+  background: rgba(255, 255, 255, .22) !important;
+}
+
+/* 喜欢图标不再有彩色投影 */
+#player #btnFav .icon,
+#player #btnFav.on .icon {
+  filter: none !important;
+  text-shadow: none !important;
+}
+
+/* 点击水波纹保留，但更淡，不制造高光错觉 */
+#player .p-play .mv-ripple,
+.swipe-ctrl .sctrl .mv-ripple,
+#player .p-ctrl-btn .mv-ripple,
+#player .p-icon-btn .mv-ripple {
+  background: radial-gradient(circle,
+    rgba(0, 0, 0, .14) 0%,
+    rgba(0, 0, 0, .06) 45%,
+    rgba(0, 0, 0, 0) 72%) !important;
+}
+
+/* ---------------- B. 进度条：纯色平面，无白流 ---------------- */
+#player .bar-line,
+.swipe-prog-bar {
+  background: rgba(255, 255, 255, .18) !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+
+#player .bar-fill,
+.swipe-prog-bar i {
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, .58) !important;
+  background-image: none !important;
+  background-size: auto !important;
+  box-shadow: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  animation: none !important;
+  transition: width .12s linear;
+}
+
+#player .bar-fill::before,
+#player .bar-fill::after,
+.swipe-prog-bar i::before,
+.swipe-prog-bar i::after {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+}
+
+.bar-knob,
+.swipe-knob {
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+/* 迷你条进度：同一口径 */
+#mini #miniBar {
+  background: rgba(26, 31, 38, .55) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+/* ---------------- C. 刷歌页喜欢：只留实心小红心 ---------------- */
+.sw-act[data-act="swipe-fav"] {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.sw-act[data-act="swipe-fav"].on {
+  background: rgba(255, 255, 255, .10) !important;
+  color: #ff3b5c !important;
+}
+
+.sw-act[data-act="swipe-fav"].on span {
+  display: none !important;
+}
+
+.sw-act[data-act="swipe-fav"].on .icon {
+  width: 19px;
+  height: 19px;
+  fill: #ff3b5c !important;
+  stroke: none !important;
+  color: #ff3b5c !important;
+  filter: none !important;
+}
+
+.sw-act[data-act="swipe-fav"].on:active {
+  transform: scale(.94);
+}
+
+/* ---------------- D. 播放键加载态：不再转圈 ---------------- */
+#player .p-play.loading::after,
+#player .p-play.loading::before {
+  content: none !important;
+  display: none !important;
+  animation: none !important;
+  border: 0 !important;
+}
+
+#player .p-play.loading .icon {
+  opacity: .55 !important;
+}
+
+#player .p-play.loading {
+  animation: none !important;
+}
+
+/* ---------------- E. 下载列表：下载中 / 已下载 分组 ---------------- */
+.dl-group {
+  padding: 12px 4px 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--sub);
+  letter-spacing: .2px;
+}
+
+.dl-group:first-child {
+  padding-top: 6px;
+}
+
+.dl-row-run {
+  background: #f7f9fb;
+}
+
+.dl-ico-run {
+  background: rgba(34, 197, 94, .12);
+  color: var(--green);
+  animation: none;
+}
+
+.dl-prog {
+  display: block;
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: rgba(24, 34, 48, .10);
+  overflow: hidden;
+}
+
+.dl-prog i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--green);
+  transition: width .25s ease;
+}
+
+.dl-row-fail .dl-sub {
+  color: #e5484d;
+}
+
+/* 我的页内嵌下载列表 */
+.mine-dl {
+  display: flex;
+  flex-direction: column;
+}
+
+.mine-dl .dl-row {
+  margin-bottom: 8px;
+}
+
+.mine-dl .dl-row:last-child {
+  margin-bottom: 0;
+}
+
+.mine-dl .dl-empty {
+  padding: 26px 16px;
+}
+
+.dl-more {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 0;
+  border: 0;
+  border-radius: 12px;
+  background: #f4f6f9;
+  color: var(--sub);
+  font-size: 12.5px;
+}
+
+.dl-more .icon {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  transform: rotate(-90deg);
+}
+
+#dlBody .dl-group:first-child {
+  padding-top: 2px;
+}

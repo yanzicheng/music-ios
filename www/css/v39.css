@@ -1,0 +1,378 @@
+/* ==========================================================================
+   v3.9
+   1) 两个播放器的播放/暂停键区分并缩小：播放页 62 → 50px 白玻璃；
+      刷歌页 56 → 44px 细描边玻璃（更轻更小，两处不再"一个样子"）。
+   2) 按钮统一毛玻璃：控制键 / 功能键 / 刷歌页侧键全部半透明 + 背景模糊 + 内高光。
+   3) 点击特效：水波纹（.mv-ripple）+ 播放键脉冲环（.pulse）。
+   4) 进度条流动特效：渐变流光平移 + 高光扫过；暂停时动画停住。
+   5) 播放页底部 6 个功能按钮从"最底部一排"改成播放器上方的玻璃胶囊条。
+   ========================================================================== */
+
+/* ---------------- 0. 玻璃变量 ---------------- */
+#player,
+.page[data-page="swipe"] {
+  --glass-bg: rgba(255, 255, 255, .09);
+  --glass-bg-2: rgba(255, 255, 255, .16);
+  --glass-bd: rgba(255, 255, 255, .18);
+  --glass-hi: rgba(255, 255, 255, .28);
+}
+
+/* ---------------- 1. 播放页播放键：缩小 + 白玻璃 ---------------- */
+#player .p-play {
+  width: 50px;
+  height: 50px;
+  flex: 0 0 50px;
+  border: 1px solid rgba(255, 255, 255, .55);
+  background: rgba(255, 255, 255, .78);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  color: #14161a;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .85);
+  position: relative;
+  overflow: hidden;
+  transition: transform .16s cubic-bezier(.32, 1.3, .5, 1), box-shadow .22s ease;
+}
+
+#player .p-play .icon {
+  width: 21px;
+  height: 21px;
+}
+
+#player .p-play:active {
+  transform: scale(.90);
+}
+
+/* 播放中：外圈柔光，静止时也有"正在播"的呼吸感 */
+#player.playing .p-play {
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .30),
+    0 0 0 5px rgba(255, 255, 255, .07),
+    0 0 18px rgba(120, 255, 190, .28),
+    inset 0 1px 0 rgba(255, 255, 255, .85);
+}
+
+/* ---------------- 1b. 刷歌页播放键：更小 + 细描边玻璃（与播放页明确区分） ---------------- */
+.swipe-ctrl .sctrl.main,
+.page[data-page="swipe"] .swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  background: rgba(255, 255, 255, .12);
+  -webkit-backdrop-filter: blur(16px) saturate(1.35);
+  backdrop-filter: blur(16px) saturate(1.35);
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .26), inset 0 1px 0 rgba(255, 255, 255, .26);
+  position: relative;
+  overflow: hidden;
+  transition: transform .15s cubic-bezier(.32, 1.3, .5, 1), background .18s ease;
+}
+
+.swipe-ctrl .sctrl.main .icon {
+  width: 19px;
+  height: 19px;
+  color: #fff;
+}
+
+.swipe-ctrl .sctrl.main:active {
+  transform: scale(.90);
+  background: rgba(255, 255, 255, .20);
+}
+
+/* ---------------- 2. 毛玻璃按钮（两处通用） ---------------- */
+/* 刷歌页侧键 */
+.swipe-ctrl .sctrl {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .13);
+  background: rgba(255, 255, 255, .07);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  position: relative;
+  overflow: hidden;
+  transition: transform .14s ease, background .18s ease;
+}
+
+.swipe-ctrl .sctrl .icon {
+  width: 19px;
+  height: 19px;
+  color: rgba(255, 255, 255, .88);
+}
+
+.swipe-ctrl .sctrl:active {
+  transform: scale(.90);
+  background: rgba(255, 255, 255, .16);
+}
+
+/* 刷歌页喜欢 / 收藏 */
+.sw-act {
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .09);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 播放页上一首 / 下一首 */
+#player .p-ctrl-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .15);
+  background: rgba(255, 255, 255, .08);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  position: relative;
+  overflow: hidden;
+  transition: transform .14s ease, background .18s ease;
+}
+
+#player .p-ctrl-btn:active {
+  transform: scale(.90);
+  background: rgba(255, 255, 255, .16);
+}
+
+/* 播放页模式 / 队列 */
+#player .p-icon-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, .11);
+  background: rgba(255, 255, 255, .06);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .13);
+  position: relative;
+  overflow: hidden;
+  transition: transform .14s ease, background .18s ease;
+}
+
+#player .p-icon-btn .icon {
+  width: 18px;
+  height: 18px;
+}
+
+#player .p-icon-btn:active {
+  transform: scale(.90);
+  background: rgba(255, 255, 255, .14);
+}
+
+/* 封面按钮：让波纹不溢出圆角 */
+.swipe-cover {
+  position: relative;
+  overflow: hidden;
+}
+
+/* 首页迷你条按钮 */
+.mini-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---------------- 3. 点击特效：水波纹 + 播放键脉冲环 ---------------- */
+.mv-ripple {
+  position: absolute;
+  z-index: 3;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle,
+    rgba(255, 255, 255, .50) 0%,
+    rgba(255, 255, 255, .22) 42%,
+    rgba(255, 255, 255, 0) 72%);
+  transform: translate(-50%, -50%) scale(0);
+  animation: mvRipple .54s cubic-bezier(.22, .68, .32, 1) forwards;
+}
+
+@keyframes mvRipple {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: .90;
+  }
+
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 0;
+  }
+}
+
+/* 白底播放键上用暗色波纹，否则看不见 */
+#player .p-play .mv-ripple {
+  background: radial-gradient(circle,
+    rgba(0, 0, 0, .30) 0%,
+    rgba(0, 0, 0, .14) 42%,
+    rgba(0, 0, 0, 0) 72%);
+}
+
+/* 播放 / 暂停切换时的脉冲环 */
+#player .p-play.pulse::before,
+.swipe-ctrl .sctrl.main.pulse::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, .62);
+  pointer-events: none;
+  animation: mvPulse .52s cubic-bezier(.22, .68, .32, 1) forwards;
+}
+
+@keyframes mvPulse {
+  0% {
+    transform: scale(.88);
+    opacity: .92;
+  }
+
+  100% {
+    transform: scale(1.62);
+    opacity: 0;
+  }
+}
+
+/* ---------------- 4. 进度条流动特效 ---------------- */
+#player .bar-line {
+  height: 4px;
+  background: rgba(255, 255, 255, .16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+  border-radius: 3px;
+}
+
+#player .bar-fill,
+.swipe-prog-bar i {
+  position: relative;
+  overflow: hidden;
+  height: 4px !important;
+  border-radius: 3px;
+  background-image: linear-gradient(90deg,
+    #17b463 0%,
+    #59e2a2 20%,
+    #b9ffe0 40%,
+    #ffffff 50%,
+    #b9ffe0 60%,
+    #59e2a2 80%,
+    #17b463 100%);
+  background-size: 220% 100%;
+  animation: v39Flow 2.6s linear infinite;
+  box-shadow: 0 0 10px rgba(70, 220, 150, .50);
+}
+
+/* 高光扫过 */
+#player .bar-fill::after,
+.swipe-prog-bar i::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 32%;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, .92) 50%,
+    rgba(255, 255, 255, 0) 100%);
+  animation: v39Sweep 2.0s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes v39Flow {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  100% {
+    background-position: -220% 50%;
+  }
+}
+
+@keyframes v39Sweep {
+  0% {
+    transform: translateX(-125%);
+  }
+
+  100% {
+    transform: translateX(340%);
+  }
+}
+
+/* 刷歌页进度条底色提亮一点，与播放页一致 */
+.swipe-prog-bar {
+  height: 4px !important;
+  background: rgba(255, 255, 255, .16) !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .05);
+}
+
+/* 暂停时流光停住，播放时才流动 */
+#player:not(.playing) .bar-fill,
+#player:not(.playing) .bar-fill::after,
+.page[data-page="swipe"]:not(.playing) .swipe-prog-bar i,
+.page[data-page="swipe"]:not(.playing) .swipe-prog-bar i::after {
+  animation-play-state: paused;
+}
+
+/* 滑块：白玻璃球 + 光晕 */
+.bar-knob {
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, .26), 0 2px 8px rgba(0, 0, 0, .34);
+}
+
+.swipe-knob {
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  margin-top: -6.5px;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .22), 0 2px 8px rgba(0, 0, 0, .34);
+}
+
+/* ---------------- 5. 播放页功能按钮：从最底部改为播放器上方玻璃胶囊 ---------------- */
+#player .p-actions {
+  margin: 4px 0 12px;
+  padding: 7px 4px;
+  gap: 2px;
+  justify-content: space-around;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .075);
+  -webkit-backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(20px) saturate(1.3);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255, 255, 255, .16);
+}
+
+#player .p-act {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 3px 0;
+  gap: 2px;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  font-size: 9.5px;
+  color: rgba(255, 255, 255, .82);
+  position: relative;
+  overflow: hidden;
+  transition: background .16s ease, transform .14s ease;
+}
+
+#player .p-act .icon {
+  width: 18px;
+  height: 18px;
+}
+
+#player .p-act b {
+  font-size: 9.5px;
+}
+
+#player .p-act:active {
+  transform: scale(.90);
+  background: rgba(255, 255, 255, .14);
+}
+
+#player .p-act.on {
+  color: var(--green-l, #6ee7a8);
+}

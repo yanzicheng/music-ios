@@ -1,0 +1,248 @@
+/* ==========================================================================
+   v3.12（按本轮 4 张截图的 5 条要求返工）
+   1. 唱针（封面中央歪斜的白圆 + 指针）直接移除
+   2. 播放键改为液态毛玻璃：高清透明，不再是白色实底
+   3. 刷歌页进度条小圆球跟随进度（JS 已补 left 更新），此处保证始终可见
+   4. 首页迷你播放条：封面恢复圆形 / 进度条可拖动（加触摸热区）/ 整体液态玻璃
+   5. 无用提示文案（刷歌上下滑提示、导入说明、音质档位长说明）已删
+   ========================================================================== */
+
+/* ---------------- 1. 唱针移除 ---------------- */
+.needle,
+#player .needle,
+#player.playing .needle,
+#player .needle::before,
+#player .needle i {
+  display: none !important;
+  content: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: none !important;
+  animation: none !important;
+}
+
+/* ---------------- 2. 播放键：液态毛玻璃（高清透明） ---------------- */
+#player #btnPlay,
+#player.playing #btnPlay {
+  background:
+    linear-gradient(155deg,
+      rgba(255, 255, 255, .34) 0%,
+      rgba(255, 255, 255, .13) 40%,
+      rgba(255, 255, 255, .06) 64%,
+      rgba(255, 255, 255, .24) 100%) !important;
+  background-image:
+    linear-gradient(155deg,
+      rgba(255, 255, 255, .34) 0%,
+      rgba(255, 255, 255, .13) 40%,
+      rgba(255, 255, 255, .06) 64%,
+      rgba(255, 255, 255, .24) 100%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(2) brightness(1.12) !important;
+  backdrop-filter: blur(22px) saturate(2) brightness(1.12) !important;
+  border: 1px solid rgba(255, 255, 255, .44) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .62),
+    inset 0 -10px 16px rgba(255, 255, 255, .13),
+    0 10px 26px rgba(0, 0, 0, .30) !important;
+  color: #fff !important;
+  filter: none !important;
+}
+
+#player #btnPlay .icon,
+#player.playing #btnPlay .icon {
+  width: 26px;
+  height: 26px;
+  color: #fff !important;
+  fill: currentColor;
+  opacity: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .30)) !important;
+}
+
+#player #btnPlay.loading .icon {
+  opacity: .55 !important;
+}
+
+#player #btnPlay:active,
+#player.playing #btnPlay:active {
+  background-image:
+    linear-gradient(155deg,
+      rgba(255, 255, 255, .46) 0%,
+      rgba(255, 255, 255, .22) 45%,
+      rgba(255, 255, 255, .14) 70%,
+      rgba(255, 255, 255, .32) 100%) !important;
+  transform: scale(.94);
+}
+
+/* 刷歌页主播放键：与播放页同款液态玻璃，避免一处白一处透明 */
+.swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn {
+  background:
+    linear-gradient(155deg,
+      rgba(255, 255, 255, .32) 0%,
+      rgba(255, 255, 255, .12) 42%,
+      rgba(255, 255, 255, .06) 66%,
+      rgba(255, 255, 255, .22) 100%) !important;
+  background-image:
+    linear-gradient(155deg,
+      rgba(255, 255, 255, .32) 0%,
+      rgba(255, 255, 255, .12) 42%,
+      rgba(255, 255, 255, .06) 66%,
+      rgba(255, 255, 255, .22) 100%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.9) brightness(1.1) !important;
+  backdrop-filter: blur(20px) saturate(1.9) brightness(1.1) !important;
+  border: 1px solid rgba(255, 255, 255, .40) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .55),
+    inset 0 -8px 14px rgba(255, 255, 255, .12),
+    0 8px 20px rgba(0, 0, 0, .26) !important;
+  color: #fff !important;
+}
+
+.swipe-ctrl .sctrl.main .icon,
+.swipe-ctrl .sctrl.swipe-playbtn .icon {
+  color: #fff !important;
+  fill: currentColor;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, .28)) !important;
+}
+
+/* 播放键水波纹：亮色，避免在玻璃底上出现暗斑 */
+#player #btnPlay .mv-ripple {
+  background: radial-gradient(circle,
+    rgba(255, 255, 255, .34) 0%,
+    rgba(255, 255, 255, .14) 45%,
+    rgba(255, 255, 255, 0) 72%) !important;
+}
+
+/* ---------------- 3. 进度条小圆球：始终可见并跟手 ---------------- */
+.swipe-prog-bar .swipe-knob,
+.swipe-prog-bar #swipeKnob,
+#player #barKnob {
+  opacity: 1 !important;
+  background: #fff !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .32) !important;
+  transition: left .12s linear, transform .14s ease;
+  will-change: left;
+}
+
+.swipe-prog-bar.dragging .swipe-knob,
+#player .bar.dragging #barKnob {
+  transition: transform .14s ease;
+  transform: scale(1.22);
+}
+
+/* ---------------- 4. 首页迷你播放条：液态玻璃 ---------------- */
+#mini,
+#mini.idle {
+  background:
+    linear-gradient(152deg,
+      rgba(255, 255, 255, .34) 0%,
+      rgba(255, 255, 255, .16) 42%,
+      rgba(255, 255, 255, .10) 66%,
+      rgba(255, 255, 255, .26) 100%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.9) brightness(1.06) !important;
+  backdrop-filter: blur(26px) saturate(1.9) brightness(1.06) !important;
+  border: 1px solid rgba(255, 255, 255, .40) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .58),
+    inset 0 -10px 18px rgba(255, 255, 255, .12),
+    0 10px 28px rgba(24, 34, 48, .20) !important;
+}
+
+#mini::after {
+  opacity: .32 !important;
+}
+
+#mini .mini-name,
+#mini.idle .mini-name {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .34) !important;
+}
+
+#mini .mini-singer,
+#mini.idle .mini-singer {
+  color: rgba(255, 255, 255, .78) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .28) !important;
+}
+
+#mini .mini-btn,
+#mini.idle .mini-btn {
+  color: #fff !important;
+}
+
+#mini .mini-btn .icon {
+  color: currentColor;
+  fill: currentColor;
+}
+
+#mini .mini-fav.on .icon {
+  fill: #ff3b5c !important;
+  color: #ff3b5c !important;
+}
+
+/* 封面：转圈时必须是圆形，不再是方图 */
+#mini .mini-cover,
+#mini.idle .mini-cover {
+  border-radius: 50% !important;
+  overflow: hidden !important;
+  background: rgba(255, 255, 255, .16) !important;
+  box-shadow:
+    0 2px 8px rgba(24, 34, 48, .22),
+    inset 0 0 0 1px rgba(255, 255, 255, .50) !important;
+}
+
+#mini .mini-cover img,
+#mini.idle .mini-cover img {
+  border-radius: 50% !important;
+  opacity: 1;
+}
+
+#mini.idle .mini-cover img {
+  opacity: .55;
+}
+
+/* 迷你条进度：加高触摸热区 + 白色细条，可拖动 */
+#mini .mini-progress {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 0;
+  height: 14px !important;
+  background: transparent !important;
+  border-radius: 0 !important;
+  display: flex;
+  align-items: center;
+  overflow: visible !important;
+  touch-action: none;
+  z-index: 2;
+}
+
+#mini .mini-progress::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  margin-top: -1.5px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .32);
+  pointer-events: none;
+}
+
+#mini #miniBar {
+  position: relative;
+  z-index: 1;
+  height: 3px !important;
+  border-radius: 999px;
+  background: #fff !important;
+  background-image: none !important;
+  box-shadow: 0 0 6px rgba(255, 255, 255, .45) !important;
+  transition: width .18s linear;
+}
+
+#mini #miniBar.dragging {
+  transition: none !important;
+}
+
+#mini.idle .mini-progress {
+  display: none !important;
+}

@@ -1,0 +1,100 @@
+/* ============ v43：本轮返工（首页迷你条改暗 / 刷歌播放键去白边平面化） ============ */
+
+/* ---------------- 1. 首页迷你播放条：深色玻璃，避免过白看不清 ---------------- */
+#mini,
+#mini.idle {
+  background:
+    linear-gradient(152deg,
+      rgba(44, 50, 62, .82) 0%,
+      rgba(26, 30, 40, .88) 46%,
+      rgba(18, 21, 29, .92) 100%) !important;
+  background-image:
+    linear-gradient(152deg,
+      rgba(44, 50, 62, .82) 0%,
+      rgba(26, 30, 40, .88) 46%,
+      rgba(18, 21, 29, .92) 100%) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.25) !important;
+  backdrop-filter: blur(22px) saturate(1.25) !important;
+  border: 1px solid rgba(255, 255, 255, .10) !important;
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, .30) !important;
+}
+
+#mini::after {
+  opacity: .10 !important;
+}
+
+#mini .mini-name,
+#mini.idle .mini-name {
+  color: #fff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .55) !important;
+}
+
+#mini .mini-singer,
+#mini.idle .mini-singer {
+  color: rgba(255, 255, 255, .66) !important;
+  text-shadow: none !important;
+}
+
+#mini .mini-btn,
+#mini.idle .mini-btn {
+  color: rgba(255, 255, 255, .92) !important;
+}
+
+#mini .mini-cover,
+#mini.idle .mini-cover {
+  background: rgba(255, 255, 255, .10) !important;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, .30),
+    inset 0 0 0 1px rgba(255, 255, 255, .14) !important;
+}
+
+#mini .mini-progress::before {
+  background: rgba(255, 255, 255, .22) !important;
+}
+
+#mini #miniBar {
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+/* 播放中小喇叭等状态图标保持高对比 */
+#mini .mini-btn.on .icon,
+#mini .mini-btn.active .icon {
+  color: #fff !important;
+}
+
+/* ---------------- 2. 刷歌页播放/暂停键：平面化，去掉白边框与高光 ---------------- */
+.swipe-ctrl .sctrl.main,
+.swipe-ctrl .sctrl.swipe-playbtn {
+  background: rgba(18, 21, 29, .58) !important;
+  background-image: none !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  border: 0 !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .26) !important;
+  color: #fff !important;
+}
+
+.swipe-ctrl .sctrl.main:active,
+.swipe-ctrl .sctrl.swipe-playbtn:active {
+  background: rgba(18, 21, 29, .74) !important;
+  background-image: none !important;
+  transform: scale(.94);
+}
+
+.swipe-ctrl .sctrl.main .icon,
+.swipe-ctrl .sctrl.swipe-playbtn .icon {
+  color: #fff !important;
+  fill: currentColor;
+  filter: none !important;
+}
+
+.swipe-ctrl .sctrl.main::before,
+.swipe-ctrl .sctrl.main::after,
+.swipe-ctrl .sctrl.swipe-playbtn::before,
+.swipe-ctrl .sctrl.swipe-playbtn::after {
+  display: none !important;
+  background: none !important;
+  box-shadow: none !important;
+}
