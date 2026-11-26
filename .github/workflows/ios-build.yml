@@ -10,6 +10,9 @@ on:
       - '**.md'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: ios-build-${{ github.ref }}
   cancel-in-progress: true
@@ -197,6 +200,17 @@ jobs:
           name: MusicPlayer-ipa
           path: MusicPlayer-unsigned.ipa
           if-no-files-found: error
+
+      - name: Publish IPA to release
+        if: success()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          TAG="build-${{ github.run_number }}"
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "MusicPlayer iOS $TAG" --notes "unsigned ipa for sideload" 
+          gh release upload "$TAG" MusicPlayer-unsigned.ipa --clobber
+          echo "RELEASE=$TAG"
 
       - name: Upload build log
         if: always()
