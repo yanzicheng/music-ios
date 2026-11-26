@@ -90,10 +90,10 @@
   }
 
   /* 音效链必须在用户手势里激活：已开启音效时建链并 resume，否则一律原声直通 */
-  function ensureFx() {
+  function ensureFx(force) {
     if (!window.AudioFX) return
     try {
-      AudioFX.attach(audio, false)
+      AudioFX.attach(audio, !!force)
       AudioFX.resume()
     } catch (e) { console.warn('[player] fx', e) }
   }
@@ -370,6 +370,17 @@
       if (!info || !info.url) throw new Error('该歌曲暂无可用音源')
       S.realQuality = info.realQuality || info.quality || q
       S.realInfo = info.realInfo || info || null
+      /* v56：把服务端 probe 出的真实流参数交给音效引擎，供诊断面板显示 */
+      if (window.AudioFX && AudioFX.setStreamInfo) {
+        try {
+          AudioFX.setStreamInfo({
+            codec: (S.realInfo && S.realInfo.codec) || S.realQuality || '',
+            bitsPerSample: (S.realInfo && S.realInfo.bitsPerSample) || 0,
+            sampleRate: (S.realInfo && S.realInfo.sampleRate) || 0,
+            channels: (S.realInfo && S.realInfo.channels) || 0,
+          })
+        } catch (e) {}
+      }
       audio.src = info.local ? info.url : API.proxyUrl(info.url)
       audio.load()
       ensureFx()
@@ -705,6 +716,7 @@
     next: next,
     prev: prev,
     seek: seek,
+    enableDiag: function () { ensureFx(true) },
     setQuality: setQuality,
     setPlayMode: setPlayMode,
     cyclePlayMode: cyclePlayMode,
@@ -722,7 +734,7 @@
           S.quality = res.config.quality
           emit('quality', S.quality, 'requested')
         }
-        /* 音效配置随 config.json 恢复；这里只载入参数，不建 AudioContext，
+        /* v56：音效配置从 config.json 恢复；此处只载入参数，不建 AudioContext，
            避免未开音效时因上下文挂起导致没有声音 */
         if (res && res.config && window.AudioFX) {
           try { AudioFX.load(res.config.audioFx) } catch (e) { console.warn('[player] fx load', e) }

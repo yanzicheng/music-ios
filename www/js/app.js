@@ -2819,6 +2819,8 @@
     soundSyncTabs()
     fxRenderAll()
     renderQualityPane()
+    renderDiag()
+    dgStart()
     /* 打开面板本身是用户手势：顺便唤醒可能挂起的 AudioContext */
     if (window.AudioFX && AudioFX.resume) AudioFX.resume()
   }
@@ -2834,6 +2836,7 @@
       document.body.classList.remove('panel-open')
     }
     renderSoundBadges()
+    dgStop()
   }
 
   function soundSyncTabs() {
@@ -2855,8 +2858,14 @@
   function soundSwitchTab(tab) {
     soundTab = tab === 'fx' ? 'fx' : 'quality'
     soundSyncTabs()
-    if (soundTab === 'fx') fxRenderAll()
-    else renderQualityPane()
+    if (soundTab === 'fx') {
+      dgStop()
+      fxRenderAll()
+    } else {
+      renderQualityPane()
+      renderDiag()
+      dgStart()
+    }
   }
 
   /* 实测编码一行摘要：codec + 位深/采样率 + 大小 + 音源 */
@@ -2941,6 +2950,174 @@
         badge.hidden = true
       }
     }
+  }
+
+  /* ---------------- 音质诊断面板（实时） ---------------- */
+  var dgTimer = 0
+  var dgRun = false
+  var dgBands = []
+
+  function dgActive() {
+    var p = $('#soundPanel')
+    if (!p || !p.classList.contains('open')) return false
+    return soundTab === 'quality'
+  }
+
+  function dgSet(sel, txt) {
+    var el = $(sel)
+    if (el) el.textContent = txt
+  }
+
+  function dgBar(sel, db) {
+    var el = $(sel)
+    if (!el) return
+    /* -60dB~0dB 映射到 0~100% */
+    var pct = !isFinite(db) ? 0 : Math.max(0, Math.min(100, ((db + 60) / 60) * 100))
+    el.style.width = pct.toFixed(1) + '%'
+  }
+
+  function dgDrawSpec() {
+    var cv = $('#dgSpec')
+    if (!cv) return
+    var dpr = Math.min(window.devicePixelRatio || 1, 3)
+    var w = cv.clientWidth || 320
+    var h = cv.clientHeight || 60
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr)
+      cv.height = Math.round(h * dpr)
+    }
+    var g = cv.getContext('2d')
+    g.setTransform(dpr, 0, 0, dpr, 0, 0)
+    g.clearRect(0, 0, w, h)
+
+    var n = dgBands.length
+    if (!n) return
+    var bw = w / n
+    for (var i = 0; i < n; i++) {
+      var v = Math.max(0, Math.min(1, dgBands[i]))
+      var bh = v * (h - 2)
+      if (bh < 0.6) continue
+      var grad = g.createLinearGradient(0, h, 0, h - bh)
+      grad.addColorStop(0, 'rgba(49,194,124,.85)')
+      grad.addColorStop(1, 'rgba(49,194,124,.32)')
+      g.fillStyle = grad
+      g.fillRect(i * bw + 0.4, h - bh, Math.max(1, bw - 0.8), bh)
+    }
+  }
+
+  /* 诊断面板渲染一帧：编码信息来自服务端 probe，响度/峰值/频谱来自 Web Audio 探针 */
+  function renderDiag() {
+    var card = $('#dgCard')
+    if (!card) return
+    var song = Player.current
+    var info = Player.state.realInfo || null
+    var d = (window.AudioFX && AudioFX.diag) ? AudioFX.diag() : null
+    var stream = (d && d.stream) || {}
+    var live = !!(d && d.ready)
+
+    /* 编码 / 位深 / 采样率 / 声道：优先实测流信息，其次回落到服务端探测结果 */
+    var codec = stream.codec || (info && info.codec) || ''
+    var bits = stream.bitsPerSample || (info && info.bitsPerSample) || 0
+    var sr = stream.sampleRate || (info && info.sampleRate) || 0
+    var ch = stream.channels || (info && info.channels) || 0
+
+    dgSet('#dgCodec', codec ? String(codec).toUpperCase() : (song ? '解析中…' : '--'))
+    dgSet('#dgBits', bits ? bits + 'bit' : '--')
+    dgSet('#dgSamplerate', sr ? (sr / 1000).toFixed(1) + 'kHz' : '--')
+    dgSet('#dgChannels', ch ? (ch === 1 ? '单声道' : '立体声') : '--')
+
+    if (!song) {
+      dgSet('#dgState', '未播放')
+      ;['#dgM', '#dgS', '#dgI', '#dgPeak'].forEach(function (s) { dgSet(s, '--') })
+      dgSet('#dgClip', '削波 0 次')
+      dgSet('#dgCorr', '相关度 --')
+      dgSet('#dgGain', '补偿 --')
+      dgBar('#dgBarL', -Infinity)
+      dgBar('#dgBarR', -Infinity)
+      dgBands = []
+      dgDrawSpec()
+      return
+    }
+
+    if (!live) {
+      dgSet('#dgState', d && d.ctx && d.ctx !== 'none' ? ('音频上下文 ' + d.ctx) : '未开启音效')
+      ;['#dgM', '#dgS', '#dgI', '#dgPeak'].forEach(function (s) { dgSet(s, '--') })
+      dgSet('#dgClip', '削波 0 次')
+      dgSet('#dgCorr', '相关度 --')
+      dgSet('#dgGain', '补偿 --')
+      dgBar('#dgBarL', -Infinity)
+      dgBar('#dgBarR', -Infinity)
+      dgBands = []
+      dgDrawSpec()
+      /* 未建链时给一次性入口：点击后在用户手势内建链（保持原声直通，不启用任何音效） */
+      var be = $('#dgEnable')
+      if (be) be.hidden = !(Player.current && !(d && d.ctx && d.ctx !== 'none'))
+      return
+    }
+    var beOn = $('#dgEnable')
+    if (beOn) beOn.hidden = true
+
+    dgSet('#dgState', d.bypassed ? '原声直通 · 实时测量' : '音效链 · 实时测量')
+
+    var loud = d.loud || {}
+    var mom = loud.m
+    var sho = loud.s
+    var intg = loud.i
+    dgSet('#dgM', isFinite(mom) ? mom.toFixed(1) + ' LUFS' : '--')
+    dgSet('#dgS', isFinite(sho) ? sho.toFixed(1) + ' LUFS' : '--')
+    dgSet('#dgI', isFinite(intg) ? intg.toFixed(1) + ' LUFS' : '--')
+
+    var pk = d.peak || {}
+    dgSet('#dgPeak', isFinite(pk.db) ? pk.db.toFixed(1) + ' dBFS' : '--')
+    dgSet('#dgClip', '削波 ' + (pk.clip || 0) + ' 次')
+
+    var corr = d.corr
+    dgSet('#dgCorr', isFinite(corr) ? '相关度 ' + corr.toFixed(2) + (corr < 0 ? ' (反相)' : '') : '相关度 --')
+
+    var gd = loud.gainDb
+    dgSet('#dgGain', (loud.on && isFinite(gd)) ? ('补偿 ' + (gd > 0 ? '+' : '') + gd.toFixed(1) + 'dB') : '补偿 --')
+
+    var lv = d.level || {}
+    dgBar('#dgBarL', lv.l)
+    dgBar('#dgBarR', lv.r)
+
+    dgBands = AudioFX.spectrum(40)
+    dgDrawSpec()
+  }
+
+  function dgLoop() {
+    dgTimer = 0
+    if (!dgRun || !dgActive()) { dgRun = false; return }
+    try { renderDiag() } catch (e) { /* 面板异常不影响播放 */ }
+    if (!dgRun) return
+    /* 10fps 刷新足够，降低 WebView 功耗 */
+    dgTimer = setTimeout(dgLoop, 100)
+  }
+
+  function dgStart() {
+    if (!dgActive()) return
+    if (dgRun && dgTimer) return
+    dgRun = true
+    if (dgTimer) { clearTimeout(dgTimer); dgTimer = 0 }
+    dgLoop()
+  }
+
+  /* 一键开启实时测量：仅建链并保持原声直通，不更改音效开关与任何参数 */
+  function dgEnableLive() {
+    try {
+      if (Player.enableDiag) Player.enableDiag()
+      else if (Player.audio && window.AudioFX) AudioFX.attach(Player.audio, true)
+      if (window.AudioFX && AudioFX.resume) AudioFX.resume()
+    } catch (e) { console.warn('[diag] 建链失败', e) }
+    var be = $('#dgEnable')
+    if (be) be.hidden = true
+    renderDiag()
+    dgStart()
+  }
+
+  function dgStop() {
+    dgRun = false
+    if (dgTimer) { clearTimeout(dgTimer); dgTimer = 0 }
   }
 
   /* 播放页底栏「音质音效」两行标签 + 音效开关态 */
@@ -3068,8 +3245,6 @@
     if (!st) return
     var sw = $('#fxSwitch')
     if (sw) sw.setAttribute('aria-pressed', st.enabled ? 'true' : 'false')
-    var sm = $('#fxSmart')
-    if (sm) sm.setAttribute('aria-pressed', st.smartVolume ? 'true' : 'false')
     var stateTxt = $('#fxStateText')
     if (stateTxt) stateTxt.textContent = st.enabled ? ('已开启 · ' + fxPresetName(st.preset)) : '关闭时为原声直通'
 
@@ -3085,6 +3260,12 @@
     if (br) br.value = Math.round((st.bass || 0) * 100)
     var bv = $('#fxBassVal')
     if (bv) bv.textContent = Math.round((st.bass || 0) * 100) + '%'
+    var ex = $('#fxExciter')
+    if (ex) ex.value = Math.round((st.exciter || 0) * 100)
+    var exv = $('#fxExciterVal')
+    if (exv) exv.textContent = Math.round((st.exciter || 0) * 100) + '%'
+    fxRenderAmb()
+    fxRenderR128()
     var fr = $('#fxFade')
     if (fr) fr.value = st.fade || 0
     var fv = $('#fxFadeVal')
@@ -3134,6 +3315,50 @@
       btn.addEventListener('mouseup', cancel)
       btn.addEventListener('mouseleave', cancel)
     })
+  }
+
+  /* 空间感模式 chips：ir=卷积 IR（默认），delay=旧版假环绕（可选） */
+  function fxRenderAmb() {
+    var box = $('#fxAmb')
+    if (!box || !window.AudioFX) return
+    var st = fxState()
+    var modes = AudioFX.AMB_MODES || []
+    var cur = st.ambienceMode || 'ir'
+    box.innerHTML = modes.map(function (m) {
+      return '<button class="fx-chip' + (m.k === cur ? ' on' : '') + '" type="button" data-act="fx-amb" data-mode="' + esc(m.k) + '">' +
+        esc(m.name) + '</button>'
+    }).join('')
+    var lab = $('#fxAmbVal')
+    if (lab) {
+      var hit = null
+      for (var i = 0; i < modes.length; i++) if (modes[i].k === cur) hit = modes[i]
+      lab.textContent = hit ? hit.name : '卷积 IR'
+    }
+  }
+
+  /* EBU R128 响度标准化开关 + 目标响度 chips */
+  function fxRenderR128() {
+    var st = fxState()
+    if (!st) return
+    var sw = $('#fxR128')
+    if (sw) sw.setAttribute('aria-pressed', st.r128 ? 'true' : 'false')
+    var tgt = Number(st.r128Target || -14)
+    var lab = $('#fxR128TargetVal')
+    if (lab) lab.textContent = tgt + ' LUFS'
+    var box = $('#fxR128Target')
+    if (box && window.AudioFX) {
+      var list = AudioFX.R128_TARGETS || [-14]
+      box.innerHTML = list.map(function (v) {
+        return '<button class="fx-chip' + (Math.abs(tgt - v) < 0.01 ? ' on' : '') + '" type="button" data-act="fx-r128-target" data-lufs="' + v + '">' +
+          v + ' LUFS</button>'
+      }).join('')
+    }
+    var note = $('#fxR128Text')
+    if (note) {
+      note.textContent = st.r128
+        ? ('已启用：按短时响度动态补偿到 ' + tgt + ' LUFS，超峰自动让路')
+        : '按真实短时/积分响度动态补偿，切歌不再忽大忽小'
+    }
   }
 
   function fxRenderRate() {
@@ -3285,6 +3510,13 @@
       var el = $('#fxBassVal')
       if (el) el.textContent = Math.round(v * 100) + '%'
     })
+    var ex = $('#fxExciter')
+    if (ex) ex.addEventListener('input', function () {
+      var v = Number(ex.value) / 100
+      AudioFX.setExciter(v)
+      var el = $('#fxExciterVal')
+      if (el) el.textContent = Math.round(v * 100) + '%'
+    })
     var fr = $('#fxFade')
     if (fr) fr.addEventListener('input', function () {
       var v = Number(fr.value)
@@ -3305,12 +3537,34 @@
     fxRenderAll()
   }
 
-  function fxToggleSmart() {
+  function fxToggleR128() {
     var st = fxState()
     if (!st) return
-    AudioFX.setSmartVolume(!st.smartVolume)
+    var on = AudioFX.setR128(!st.r128)
     fxRenderAll()
-    toast(st.smartVolume ? '已关闭智能音量平衡' : '已开启智能音量平衡')
+    toast(on ? ('已开启 EBU R128 响度标准化（目标 ' + (st.r128Target || -14) + ' LUFS）') : '已关闭响度标准化，恢复直通增益')
+  }
+
+  /* 历史命名保留：旧「智能音量平衡」入口统一走 R128 */
+  function fxToggleSmart() {
+    fxToggleR128()
+  }
+
+  function fxPickAmb(mode) {
+    if (!mode) return
+    var st = fxState()
+    if (st.ambienceMode === mode) return
+    if (!AudioFX.setAmbienceMode(mode)) return
+    fxRenderAll()
+    toast('空间感：' + (mode === 'delay' ? '经典延迟（假环绕）' : '卷积 IR'))
+  }
+
+  function fxPickR128Target(lufs) {
+    var v = Number(lufs)
+    if (!isFinite(v)) return
+    AudioFX.setR128Target(v)
+    fxRenderAll()
+    toast('目标响度 ' + v + ' LUFS')
   }
 
   function fxPickPreset(key) {
@@ -3373,7 +3627,9 @@
     AudioFX.setEqAll([0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
     AudioFX.setWidth(0)
     AudioFX.setBass(0)
-    AudioFX.setSmartVolume(false)
+    AudioFX.setExciter(0)
+    AudioFX.setAmbienceMode('ir')
+    AudioFX.setR128(false)
     AudioFX.setFade(0)
     AudioFX.setRate(1)
     AudioFX.setPreset('original')
@@ -3744,6 +4000,10 @@
         case 'fx-toggle': fxToggle(); break
         case 'fx-reset': fxResetAll(); break
         case 'fx-smart': fxToggleSmart(); break
+        case 'fx-r128': fxToggleR128(); break
+        case 'fx-amb': fxPickAmb(el.getAttribute('data-mode')); break
+        case 'fx-r128-target': fxPickR128Target(el.getAttribute('data-lufs')); break
+        case 'dg-enable': dgEnableLive(); break
         case 'fx-eq-flat': fxEqFlat(); break
         case 'fx-eq-reset-preset': fxEqResetPreset(); break
         case 'fx-save': fxSaveCustom(); break

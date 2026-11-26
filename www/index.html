@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="css/v53.css">
 <link rel="stylesheet" href="css/v54.css">
 <link rel="stylesheet" href="css/v55.css">
+<link rel="stylesheet" href="css/v56.css">
 </head>
 <body>
 
@@ -292,6 +293,34 @@
         <button class="fx-switch" id="qStrict" type="button" data-act="q-strict" aria-pressed="false"><i></i></button>
       </div>
 
+      <div class="dg-card" id="dgCard">
+        <div class="dg-head">
+          <b>音质诊断</b>
+          <span class="dg-state" id="dgState">未播放</span>
+        </div>
+        <div class="dg-grid">
+          <div class="dg-item"><span>编码</span><b id="dgCodec">--</b></div>
+          <div class="dg-item"><span>位深</span><b id="dgBits">--</b></div>
+          <div class="dg-item"><span>采样率</span><b id="dgSamplerate">--</b></div>
+          <div class="dg-item"><span>声道</span><b id="dgChannels">--</b></div>
+          <div class="dg-item"><span>瞬时响度</span><b id="dgM">--</b></div>
+          <div class="dg-item"><span>短时响度</span><b id="dgS">--</b></div>
+          <div class="dg-item"><span>积分响度</span><b id="dgI">--</b></div>
+          <div class="dg-item"><span>采样峰值</span><b id="dgPeak">--</b></div>
+        </div>
+        <div class="dg-meter">
+          <div class="dg-meter-row"><span>L</span><i><em id="dgBarL"></em></i></div>
+          <div class="dg-meter-row"><span>R</span><i><em id="dgBarR"></em></i></div>
+        </div>
+        <canvas id="dgSpec" class="dg-spec" width="640" height="120"></canvas>
+        <div class="dg-foot">
+          <span class="dg-tag" id="dgClip">削波 0 次</span>
+          <span class="dg-tag" id="dgCorr">相关度 --</span>
+          <span class="dg-tag" id="dgGain">补偿 --</span>
+        </div>
+        <button class="dg-enable" id="dgEnable" type="button" data-act="dg-enable" hidden>开启实时测量</button>
+      </div>
+
       <div class="sp-h">音质档位</div>
       <div class="q-list" id="qList"></div>
     </div>
@@ -326,16 +355,34 @@
       </div>
 
       <div class="fx-section">
-        <div class="fx-h">低音增强 <span class="fx-h-sub" id="fxBassVal">0%</span></div>
+        <div class="fx-h">低音增强（分频 @160Hz） <span class="fx-h-sub" id="fxBassVal">0%</span></div>
         <input class="fx-range" id="fxBass" type="range" min="0" max="100" step="1" value="0">
+        <div class="fx-note">低频单独抽出提升，不再整体硬拉 lowshelf，中高频不受牵连</div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">谐波激励 <span class="fx-h-sub" id="fxExciterVal">0%</span></div>
+        <input class="fx-range" id="fxExciter" type="range" min="0" max="100" step="1" value="0">
+        <div class="fx-note">给低频补二次/三次谐波，手机小喇叭也能听出下潜</div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">空间感 <span class="fx-h-sub" id="fxAmbVal">卷积 IR</span></div>
+        <div class="fx-chips" id="fxAmb"></div>
+        <div class="fx-note">卷积 IR 为内置合成脉冲响应；经典延迟是旧版 delay+feedback 假环绕</div>
       </div>
 
       <div class="fx-switch-row">
         <div class="fx-switch-txt">
-          <b>智能音量平衡</b>
-          <span>压缩器动态均衡，弱歌不再听不清</span>
+          <b>响度标准化 (EBU R128)</b>
+          <span id="fxR128Text">按真实短时/积分响度动态补偿，切歌不再忽大忽小</span>
         </div>
-        <button class="fx-switch" id="fxSmart" type="button" data-act="fx-smart" aria-pressed="false"><i></i></button>
+        <button class="fx-switch" id="fxR128" type="button" data-act="fx-r128" aria-pressed="false"><i></i></button>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">目标响度 <span class="fx-h-sub" id="fxR128TargetVal">-14 LUFS</span></div>
+        <div class="fx-chips" id="fxR128Target"></div>
       </div>
 
       <div class="fx-section">

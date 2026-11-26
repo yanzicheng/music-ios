@@ -389,6 +389,7 @@ class SourceManager {
               codec: spec.codec,
               bitsPerSample: spec.bitsPerSample,
               sampleRate: spec.sampleRate,
+              channels: spec.channels,
               lossless: LOSSLESS_TIERS.has(act),
               // 标称 Hi-Res 但实测仅 16bit：前端提示"标称24bit实则16bit"，避免虚假宣传
               fakeHiRes: q === 'flac24bit' && act === 'flac',

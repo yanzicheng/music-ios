@@ -1,0 +1,200 @@
+/* ==========================================================================
+   v56 补丁（音质增强 5 项 · 组合A）
+   1) 音质诊断面板 dg-card：编码/位深/采样率/声道 + 实时 LUFS/峰值/削波/相关度
+      + L/R 电平条 + 频谱画布
+   2) 音效页新增：谐波激励滑杆、空间感（卷积 IR / 经典延迟）chips、
+      EBU R128 开关 + 目标响度 chips、低音栏标注分频点
+   本文件只做新增与微调，不改既有布局骨架，故全部用高优先级选择器叠加。
+   ========================================================================== */
+
+/* ---------------- 1. 音质诊断面板 ---------------- */
+.dg-card {
+  margin: 12px 14px 0 !important;
+  padding: 14px 14px 12px !important;
+  border-radius: 16px !important;
+  background: linear-gradient(180deg, rgba(49, 194, 124, .07), rgba(49, 194, 124, .02)) !important;
+  border: 1px solid rgba(49, 194, 124, .16) !important;
+  box-sizing: border-box;
+}
+
+.dg-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.dg-head b {
+  font-size: 14.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  color: var(--text-1, #111) !important;
+}
+.dg-state {
+  flex: 0 0 auto;
+  max-width: 62%;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background: rgba(49, 194, 124, .12);
+  color: #1f8a57;
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 2×4 数据网格：左标签右数值，数值等宽字体避免跳动 */
+.dg-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 8px 10px !important;
+  margin-bottom: 12px;
+}
+.dg-item {
+  display: flex !important;
+  align-items: baseline !important;
+  justify-content: space-between !important;
+  gap: 6px;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .028);
+  box-sizing: border-box;
+}
+.dg-item span {
+  flex: 0 0 auto;
+  font-size: 11.5px !important;
+  line-height: 1.2 !important;
+  color: var(--text-3, #8a8a8e) !important;
+}
+.dg-item b {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  color: var(--text-1, #111) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* L/R 电平条 */
+.dg-meter {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  margin-bottom: 10px;
+}
+.dg-meter-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.dg-meter-row > span {
+  flex: 0 0 12px;
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--text-3, #8a8a8e);
+  font-variant-numeric: tabular-nums;
+}
+.dg-meter-row > i {
+  position: relative;
+  flex: 1 1 auto;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, .06);
+  overflow: hidden;
+  font-style: normal;
+}
+.dg-meter-row > i > em {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #31c27c 0%, #31c27c 72%, #f0b429 88%, #e5484d 100%);
+  transition: width .09s linear;
+}
+
+/* 频谱画布 */
+.dg-spec {
+  display: block;
+  width: 100% !important;
+  height: 62px !important;
+  margin: 0 0 10px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .035);
+}
+
+/* 底部标签：削波 / 相关度 / 响度补偿 */
+.dg-foot {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+.dg-tag {
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, .04);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-2, #4a4a4f);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 未建链时的一键开启测量（用户手势内建链，避免未开音效时静默改道） */
+.dg-enable {
+  display: block;
+  width: 100%;
+  height: 34px;
+  margin-top: 10px;
+  border: 0;
+  border-radius: 11px;
+  background: rgba(49, 194, 124, .14);
+  color: #1f8a57;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 34px;
+  text-align: center;
+}
+.dg-enable[hidden] { display: none !important; }
+.dg-enable:active { background: rgba(49, 194, 124, .24); }
+
+/* ---------------- 2. 音效页新增控件 ---------------- */
+/* 谐波激励滑杆沿用 .fx-range，仅给说明文字一点点收紧 */
+#fxExciter {
+  accent-color: #31c27c;
+}
+#fxWidth,
+#fxBass {
+  accent-color: #31c27c;
+}
+
+/* 空间感 / 目标响度 chips 与既有预设 chips 视觉一致 */
+#fxAmb .fx-chip,
+#fxR128Target .fx-chip {
+  min-width: 0 !important;
+  padding: 0 12px !important;
+  height: 30px !important;
+  font-size: 12.5px !important;
+  line-height: 30px !important;
+}
+
+/* R128 开关行：与音效开关行保持同样的间距节奏 */
+#fxR128 {
+  flex: 0 0 auto;
+}
+
+/* 窄屏（≤360dp）时诊断网格仍排两列，但压缩内边距防溢出 */
+@media (max-width: 360px) {
+  .dg-card { margin: 10px 10px 0 !important; padding: 12px 11px 10px !important; }
+  .dg-item { padding: 6px 7px; }
+  .dg-item b { font-size: 12px !important; }
+  .dg-state { font-size: 11px; }
+}
