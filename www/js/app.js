@@ -1197,13 +1197,36 @@
     }
     leaf.__idx = swipeState.idx
     leaf.__stamp = flip.stamp
+    leaf.__at = Date.now()
     return leaf
   }
 
   /* 空闲时预构建纸页：只在手势已确认后调用，避免每次点击都白克隆一份 DOM */
   function flipPrepare() {
-    if (flip.leaf && flip.leaf.__stamp === flip.stamp) return
+    if (flip.leaf && flip.leaf.__idx === swipeState.idx) return
     flip.leaf = flipLeafBuild(flipCard())
+  }
+
+  /* v5.8：静止期也备一张纸页。
+     旧逻辑只在拖动确认之后的下一帧才克隆纸页，快速甩动（几百毫秒内只产生
+     1~2 个 touchmove）时根本来不及备好，松手那一帧就要同步 cloneNode 整张卡
+     并顺带量一次几何——这一下就是"松手后卡一下"的直接来源。
+     改成切歌落定后空闲时预构建，任何时刻翻页（手势 / 按钮 / 键盘）都能零克隆起翻。 */
+  function flipPrepareIdle() {
+    if (flip.idleTimer) return
+    flip.idleTimer = setTimeout(function () {
+      flip.idleTimer = 0
+      /* 正在手势 / 翻页中：稍后再来一次，别把这次空闲构建丢掉 */
+      if (flip.active || flip.busy) { setTimeout(flipPrepareIdle, 260); return }
+      if (!onSwipePage()) return
+      var lf = flip.leaf
+      /* 已有纸页且内容够新（<2.5s）就直接用；否则重建，避免纸页上停在几十秒前的
+         进度/歌词快照。重建只花一次 cloneNode，发生在静止空闲期，不碰动画帧。 */
+      if (lf && lf.__idx === swipeState.idx && (Date.now() - (lf.__at || 0)) < 2500) return
+      if (lf && lf.parentNode) return
+      flip.leaf = null
+      try { flipPrepare() } catch (e) {}
+    }, 340)
   }
 
   /** 书本翻页切歌：
@@ -1271,43 +1294,52 @@
     var leaf = flip.leaf
     flip.leaf = null
     if (!leaf || leaf.__idx !== swipeState.idx) leaf = flipLeafBuild(card)
-    flipReset(card)
 
-    /* 2) 首帧只做「挂纸页 + 起翻」：不克隆、不测量、不重建、不解码 */
+    /* 2) 首帧只做「挂纸页 + 起翻」：不克隆、不测量、不重建、不解码、不写多余样式。
+          v5.8：卡片复位（清 --flip-p / 摘 dragging）推到下一帧——它被纸页完全遮住，
+          没必要占起翻这一帧的样式重算预算；transform-origin 已由 leaf-up/down 类接管，
+          这里不再写内联。 */
     if (leaf) {
       box.appendChild(leaf)
       flip.liveLeaf = leaf
-      leaf.style.transformOrigin = up ? '50% 0%' : '50% 100%'
       leaf.classList.add(up ? 'leaf-up' : 'leaf-down')
     }
 
     /* 3) 换歌与重建推到下一帧：此时纸页已完整盖住卡片区域，
-          innerHTML 重建、新封面解码、壁纸交叉淡入全部被纸页挡在后面 */
+         新封面解码被纸页挡在后面 */
     requestAnimationFrame(function () {
+      flipReset(card)
       swipeState.idx = next
       swipeMarkSeen(swipeState.list[next])
-      renderSwipe(true)
-      renderSwipeWall()
+      renderSwipe(true, true)
       var nc = flipCard()
       if (nc) {
-        /* 新页从手势来的方向顺势推入：上滑从底部推上来，下滑从顶部落回来 */
+        /* v5.8：入场不再位移/缩放（v58.css 里只剩 0.14s 透明度收敛），
+           翻页瞬间新页就是满屏稳态，不会出现"小一圈再长回全屏" */
         var inCls = up ? 'page-in-up' : 'page-in-down'
         nc.classList.add(inCls)
-        setTimeout(function () { nc.classList.remove(inCls) }, 520)
+        setTimeout(function () { nc.classList.remove(inCls) }, 200)
       }
-      playSwipeCurrent()
       renderProgress()
       swipeMaybePrefetch()
     })
 
+    /* 3b) v5.8：壁纸换图与音频起播都挪出翻页前两帧。
+           壁纸是 600×900 大图，换图首帧要做纹理上传；音频换源会触发解码。
+           两者原本都挤在翻页首帧，正是"翻页一顿"的来源之一。 */
+    setTimeout(function () { renderSwipeWall() }, 200)
+    setTimeout(function () { playSwipeCurrent() }, 70)
+
     /* 4) 纸页翻走后收尾：清纸页、写回"已刷过"记录（localStorage 同步写放到这里，
-          不占用动画帧），并补一次歌词同步（动画期间歌词同步是挂起的） */
+          不占用动画帧），并补一次歌词同步（动画期间歌词同步是挂起的）。
+          v5.8：纸页动画 0.34s，收尾同步收紧到 0.36s，连续甩动不再被旧时长卡住 */
     setTimeout(function () {
       if (leaf && leaf.parentNode) leaf.parentNode.removeChild(leaf)
       if (flip.liveLeaf === leaf) flip.liveLeaf = null
       flip.busy = false
       if (onSwipePage()) syncSwipeKaraoke(Player.state)
-    }, 480)
+      flipPrepareIdle()
+    }, 360)
     /* "已刷过"记录要写 localStorage（同步 IO），单独再往后放，
        既不影响起翻，也不挡下一轮联动刷歌 */
     setTimeout(swipeSeenFlush, 900)
@@ -1388,7 +1420,9 @@
     flip.dy = 0
     flip.vy = 0
     flip.dir = 0
-    flip.leaf = null
+    /* v5.8：不再一上手就把预构建好的纸页丢掉——只有它已经不是"当前这首"时才作废。
+       否则空闲预构建白做，快速甩动还是要在松手帧现场克隆整张卡。 */
+    if (flip.leaf && flip.leaf.__idx !== swipeState.idx) flip.leaf = null
     flip.stamp = (flip.stamp || 0) + 1
     flip.y0 = ptY(e)
     flip.t0 = Date.now()
@@ -1642,7 +1676,7 @@
     return true
   }
 
-  function renderSwipe(resetScroll) {
+  function renderSwipe(resetScroll, skipWall) {
     var box = $('#swipeScroll')
     if (!box) return
     if (!swipeState.list.length) {
@@ -1673,9 +1707,13 @@
     positionSwipeSide()
     bindSwipeFlip()
     bindSwipeBar()
-    renderSwipeWall()
+    /* v5.8：flipTo 翻页路径传 skipWall，把壁纸换图挪出翻页首帧（大图纹理上传
+       与翻页动画撞帧是"翻页一顿"的直接来源），由调用方稍后自己补 */
+    if (!skipWall) renderSwipeWall()
     renderProgress()
     renderSwipeLyric()
+    /* v5.8：落定后空闲时把下一次翻页要用的纸页先克隆好（不阻塞本次渲染） */
+    flipPrepareIdle()
   }
 
   /** 刷歌页进度条拖动（v3.8）：跟手预览 + 松手 seek 一次，并拦住外层上下滑翻页手势 */

@@ -1,0 +1,71 @@
+﻿/* ==========================================================================
+   v5.8 鍒锋瓕椤点€屽垏姝岃鍗′竴涓嬫墠鎭㈠鍏ㄥ睆銆嶄笓椤逛慨澶?
+   鐜拌薄锛氫笂涓嬫粦缈婚〉鍚庯紝鏂伴〉涓嶆槸绔嬪埢婊″睆锛岃€屾槸鍏堝皬涓€鍦?/ 鍋忎笅 / 鍗婇€忔槑锛?        杩囦竴浼氬効鎵嶆參鎱㈤暱鍥炲叏灞忥紝鎵嬫劅涓婂氨鏄?鍗￠】涓€涓嬫墠鎭㈠"銆?
+   鎴愬洜锛?   1) v37 鐨勬柊椤靛叆鍦哄姩鐢?v37PageInUp/Down 璧峰甯ф槸
+      translate3d(0, 22%, 0) scale(.972) opacity .72锛岃窇婊?0.44s銆?      涔熷氨鏄缈婚〉鍔ㄧ敾鐨勫ご 0.3 绉掗噷锛屽睆骞曚腑澶偅寮犲崱鐗囨湰鏉ュ氨涓嶆槸婊″睆鎬併€?   2) 绾搁〉缈昏蛋鐢ㄦ椂 0.46s锛屼笌鍏ュ満鍔ㄧ敾閿欎綅锛屾湯灏捐繕娈嬬暀 .06 鐨勬棫鍗¤挋灞傦紝
+      杩涗竴姝ユ嫋鎱?鐢婚潰鍥炲埌骞插噣绋虫€?鐨勬椂闂寸偣銆?
+   鏈ˉ涓佸仛娉曪細
+   1) 鏂伴〉鍏ュ満鍙繚鐣欐瀬杞荤殑閫忔槑搴︽敹鏁涳紙0.14s锛夛紝涓嶅啀浣嶇Щ銆佷笉鍐嶇缉鏀锯€斺€?      缈婚〉鐬棿鏂伴〉鍗充负婊″睆绋虫€侊紝绾搁〉缈昏蛋鍚庣敾闈㈢珛鍒诲共鍑€銆?   2) 绾搁〉缈昏蛋缂╃煭鍒?0.34s 涓旀湯甯у畬鍏ㄩ€忔槑锛屾敹寰楀共鍑€鍒╄惤锛屼笉鐣欒挋灞傘€?   3) 鍙敼鏃堕暱涓庡叆鍦哄Э鎬侊紝绾搁〉鐨勪笂缈?/ 鍥炵炕鏂瑰悜涓?3D 瑙傛劅淇濇寔涓嶅彉銆?   ========================================================================== */
+
+/* ---------------- 1. 鏂伴〉鍏ュ満锛氬彧鏀堕€忔槑搴︼紝涓嶄綅绉讳笉缂╂斁 ---------------- */
+@keyframes v58PageInSoft {
+  0% { opacity: .88; }
+  100% { opacity: 1; }
+}
+
+.swipe-card.page-in-up,
+.swipe-card.page-in-down {
+  animation: v58PageInSoft .14s linear both;
+  /* 鍏抽敭锛氭竻鎺?v37 閭ｆ潯鍔ㄧ敾甯︽潵鐨勪綅绉讳笌缂╂斁锛屽叆鍦烘湡闂村氨鏄弧灞?*/
+  transform: none;
+  will-change: opacity;
+}
+
+/* 鍏ュ満鍔ㄧ敾缁撴潫鍚庨噴鏀惧悎鎴愬眰锛屽洖鍒伴潤鎭€侊紙缈婚〉鍒氱粨鏉熷氨閲婃斁锛岀渷鏄惧瓨锛?*/
+.swipe-card {
+  will-change: auto;
+}
+
+#swipeScroll .swipe-card.dragging {
+  will-change: transform, opacity;
+}
+
+/* ---------------- 2. 绾搁〉缈昏蛋锛氭洿蹇€佹湯甯у叏閫忔槑 ---------------- */
+@keyframes v58LeafUp {
+  0% {
+    transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1400px) translate3d(0, -9%, 0) rotateX(-74deg);
+    opacity: 0;
+  }
+}
+
+@keyframes v58LeafDown {
+  0% {
+    transform: perspective(1400px) translate3d(0, 0, 0) rotateX(0deg) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: perspective(1400px) translate3d(0, 9%, 0) rotateX(74deg);
+    opacity: 0;
+  }
+}
+
+.swipe-leaf.leaf-up {
+  animation: v58LeafUp .34s cubic-bezier(.30, .72, .30, 1) forwards;
+  transform-origin: 50% 0%;
+}
+
+.swipe-leaf.leaf-down {
+  animation: v58LeafDown .34s cubic-bezier(.30, .72, .30, 1) forwards;
+  transform-origin: 50% 100%;
+}
+
+/* ---------------- 3. 缈婚〉鏈熼棿澹佺焊灞備笉鍋氳繃娓″悎鎴?----------------
+   鏂板绾哥殑绾圭悊涓婁紶涓庝氦鍙夋贰鍏ユ敼鍒扮焊椤靛嚑涔庣炕瀹屼箣鍚庡啀鍋氾紙JS 渚у欢鍚庤皟鐢級锛?   閬垮厤"缈婚〉棣栧抚"涓?600脳900 澹佺焊瑙ｇ爜涓婁紶"鎾炲湪鍚屼竴甯с€?*/
+#wallA,
+#wallB {
+  will-change: auto;
+}
