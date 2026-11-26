@@ -92,22 +92,29 @@ jobs:
       - name: Build (release, device, unsigned)
         run: |
           set -o pipefail
-          FLAGS=(
-            --buildFlag="CODE_SIGNING_ALLOWED=NO"
-            --buildFlag="CODE_SIGNING_REQUIRED=NO"
-            --buildFlag="CODE_SIGN_IDENTITY="
-          )
-          # --no-sign 在部分 cordova-ios 版本上不识别，失败则退回纯 buildFlag 方式
-          if ! npx cordova build ios --release --device --no-sign "${FLAGS[@]}" 2>&1 | tee build.log; then
-            echo "::warning::带 --no-sign 的构建失败，去掉该参数重试"
-            npx cordova build ios --release --device "${FLAGS[@]}" 2>&1 | tee -a build.log
+          BUILD_FLAGS=(--buildFlag="CODE_SIGNING_ALLOWED=NO" --buildFlag="CODE_SIGNING_REQUIRED=NO" --buildFlag="CODE_SIGN_IDENTITY=")
+          set +e
+          npx cordova build ios --release --device "${BUILD_FLAGS[@]}" > build.log 2>&1
+          RC=$?
+          if [ $RC -ne 0 ]; then
+            echo "===== BUILD FAILED rc=$RC ====="
+            echo "--- error lines ---"
+            grep -nE "error:|error |fatal error|The following build commands failed|BUILD FAILED|Failed to|Command CompileSwift failed" build.log | head -n 40
+            echo "--- tail 60 ---"
+            tail -n 60 build.log
+            ERRS=$(grep -E "error:|fatal error|The following build commands failed|BUILD FAILED|Failed to build|Command .* failed" build.log | head -n 25 | tr -d '\r' | cut -c1-300 | awk '{printf "%s%%0A", $0}')
+            TAILTXT=$(tail -n 15 build.log | tr -d '\r' | cut -c1-300 | awk '{printf "%s%%0A", $0}')
+            echo "::error title=cordova build ios failed rc=$RC::$ERRS$TAILTXT"
+            exit $RC
           fi
+          echo "===== BUILD OK ====="
+          tail -n 20 build.log
 
       - name: Package unsigned .app
         run: |
           set -e
-          APP=$(find platforms/ios/build -maxdepth 3 -name "*.app" -type d | head -n 1)
-          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios/build -maxdepth 3 -type d; exit 1; fi
+          APP=$(find platforms/ios/build -name "*.app" -type d | head -n 1)
+          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios/build -name "*.app" -type d; exit 1; fi
           echo "APP=$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" MusicPlayer-unsigned.zip
           ls -lh MusicPlayer-unsigned.zip
