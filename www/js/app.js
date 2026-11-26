@@ -3299,6 +3299,9 @@
       dgSet('#dgHeadroom', '余量 --')
       dgSet('#dgCorr', '相关度 --')
       dgSet('#dgGain', '补偿 --')
+      dgSet('#dgMb', '母带 --')
+      dgSet('#dgMbGr', '母带GR --')
+      dgSet('#dgTruePeak', '真峰值 --')
       dgBar('#dgBarL', -Infinity)
       dgBar('#dgBarR', -Infinity)
       dgBands = []
@@ -3314,6 +3317,9 @@
       dgSet('#dgHeadroom', '余量 --')
       dgSet('#dgCorr', '相关度 --')
       dgSet('#dgGain', '补偿 --')
+      dgSet('#dgMb', '母带 --')
+      dgSet('#dgMbGr', '母带GR --')
+      dgSet('#dgTruePeak', '真峰值 --')
       dgBar('#dgBarL', -Infinity)
       dgBar('#dgBarR', -Infinity)
       dgBands = []
@@ -3354,6 +3360,23 @@
 
     var gd = loud.gainDb
     dgSet('#dgGain', (loud.on && isFinite(gd)) ? ('补偿 ' + (gd > 0 ? '+' : '') + gd.toFixed(1) + 'dB') : '补偿 --')
+
+    /* 母带总线：状态 + 胶水压缩 GR + 总输出真峰值（末端软钳顶即 -1dBFS） */
+    var mb = d.mastering || {}
+    if (mb.on && mb.applied) {
+      dgSet('#dgMb', '母带 ' + (mb.presetName || mb.preset || '') + (mb.active ? ' 工作中' : ' 待机'))
+    } else if (mb.on) {
+      dgSet('#dgMb', '母带 已开 · 未处理')
+    } else {
+      dgSet('#dgMb', '母带 关闭')
+    }
+    var mbGr = mb.grDb
+    dgSet('#dgMbGr', isFinite(mbGr)
+      ? ('母带GR ' + (mb.active ? ('−' + Math.abs(mbGr).toFixed(1) + 'dB') : '0.0dB') + ' / 阈 ' + (isFinite(mb.glueThresholdDb) ? mb.glueThresholdDb.toFixed(0) : '-18') + 'dB')
+      : '母带GR --')
+    var mtp = mb.truePeakHoldDb
+    var ceil = isFinite(mb.ceilingDb) ? mb.ceilingDb.toFixed(1) : '-1.0'
+    dgSet('#dgTruePeak', isFinite(mtp) ? ('真峰值 ' + mtp.toFixed(1) + ' / 顶 ' + ceil + 'dB') : ('真峰值 -- / 顶 ' + ceil + 'dB'))
 
     var lv = d.level || {}
     dgBar('#dgBarL', lv.l)
@@ -3544,6 +3567,7 @@
     if (exv) exv.textContent = Math.round((st.exciter || 0) * 100) + '%'
     fxRenderAmb()
     fxRenderR128()
+    fxRenderMastering()
     var fr = $('#fxFade')
     if (fr) fr.value = st.fade || 0
     var fv = $('#fxFadeVal')
@@ -3636,6 +3660,56 @@
       note.textContent = st.r128
         ? ('已启用：按短时响度动态补偿到 ' + tgt + ' LUFS，超峰自动让路')
         : '按真实短时/积分响度动态补偿，切歌不再忽大忽小'
+    }
+  }
+
+  /* 母带总线：开关、风格 chips、四个归一量滑杆、说明文案 */
+  function fxRenderMastering() {
+    var st = fxState()
+    if (!st || !window.AudioFX) return
+    var mb = st.mastering || {}
+    var sw = $('#fxMastering')
+    if (sw) sw.setAttribute('aria-pressed', mb.on ? 'true' : 'false')
+
+    var presets = AudioFX.MASTER_PRESETS || {}
+    var cur = mb.preset || 'clear'
+    var box = $('#fxMbPreset')
+    if (box) {
+      box.innerHTML = Object.keys(presets).map(function (k) {
+        return '<button class="fx-chip' + (k === cur ? ' on' : '') + '" type="button" data-act="fx-mb-preset" data-id="' + esc(k) + '">' +
+          esc(presets[k].name) + '</button>'
+      }).join('')
+    }
+
+    var pct = function (v) { return Math.round((v || 0) * 100) + '%' }
+    var map = [['#fxMbGlue', '#fxMbGlueVal', 'glue'], ['#fxMbSat', '#fxMbSatVal', 'sat'], ['#fxMbAir', '#fxMbAirVal', 'air'], ['#fxMbWidth', '#fxMbWidthVal', 'width']]
+    map.forEach(function (m) {
+      var r = $(m[0])
+      if (r) r.value = Math.round((mb[m[2]] || 0) * 100)
+      var el = $(m[1])
+      if (el) el.textContent = pct(mb[m[2]])
+    })
+
+    var nowLab = $('#fxMbPresetNow')
+    if (nowLab) nowLab.textContent = (presets[cur] && presets[cur].name) || 'Clear'
+    var note = $('#fxMbText')
+    if (note) {
+      note.textContent = mb.on
+        ? ('已开启：' + ((presets[cur] && presets[cur].name) || 'Clear') + ' 风格，胶水 ' + pct(mb.glue) + ' · 饱和 ' + pct(mb.sat))
+        : '关闭时原样通过，不参与着色'
+    }
+    var gnote = $('#fxMbGlueNote')
+    if (gnote) {
+      /* 说明行按真实下发值回显：阈值/压缩比随"胶水"滑杆联动，存在感架点随风格变化 */
+      var dm = null
+      try { dm = AudioFX.diag().mastering } catch (e) { dm = null }
+      var pres = (presets[cur] && presets[cur].presence) || 0
+      var make = (presets[cur] && presets[cur].makeup) || 0
+      var thr = dm && isFinite(dm.glueThresholdDb) ? dm.glueThresholdDb.toFixed(1) : '-18.0'
+      var rat = dm && isFinite(dm.glueRatio) ? dm.glueRatio.toFixed(1) : '2.0'
+      var pHz = dm && dm.presenceFreq ? (dm.presenceFreq / 1000).toFixed(1) : '3.0'
+      gnote.textContent = '阈 ' + thr + 'dB / 6dB knee / ' + rat + ':1 / 30ms / 250ms；存在感 +' +
+        Number(pres).toFixed(1) + 'dB @' + pHz + 'kHz，补偿 +' + Number(make).toFixed(1) + 'dB'
     }
   }
 
@@ -3795,6 +3869,19 @@
       var el = $('#fxExciterVal')
       if (el) el.textContent = Math.round(v * 100) + '%'
     })
+    var mbMap = [['#fxMbGlue', '#fxMbGlueVal', 'glue'], ['#fxMbSat', '#fxMbSatVal', 'sat'], ['#fxMbAir', '#fxMbAirVal', 'air'], ['#fxMbWidth', '#fxMbWidthVal', 'width']]
+    mbMap.forEach(function (m) {
+      var r = $(m[0])
+      if (!r) return
+      r.addEventListener('input', function () {
+        var v = Number(r.value) / 100
+        AudioFX.setMasterParam(m[2], v)
+        var el = $(m[1])
+        if (el) el.textContent = Math.round(v * 100) + '%'
+      })
+      r.addEventListener('change', function () { fxRenderMastering() })
+    })
+
     var fr = $('#fxFade')
     if (fr) fr.addEventListener('input', function () {
       var v = Number(fr.value)
@@ -3843,6 +3930,23 @@
     AudioFX.setR128Target(v)
     fxRenderAll()
     toast('目标响度 ' + v + ' LUFS')
+  }
+
+  function fxToggleMastering() {
+    var st = fxState()
+    if (!st) return
+    var mb = st.mastering || {}
+    var on = AudioFX.setMastering(!mb.on)
+    fxRenderAll()
+    toast(on ? ('母带处理已开启：' + ((AudioFX.MASTER_PRESETS[mb.preset] || {}).name || 'Clear')) : '母带处理已关闭（原样通过）')
+  }
+
+  function fxPickMasterPreset(key) {
+    if (!key) return
+    if (!AudioFX.setMasterPreset(key)) { toast('母带风格不存在'); return }
+    fxRenderAll()
+    var p = AudioFX.MASTER_PRESETS[key] || {}
+    toast('母带风格：' + (p.name || key))
   }
 
   function fxPickPreset(key) {
@@ -4281,6 +4385,8 @@
         case 'fx-r128': fxToggleR128(); break
         case 'fx-amb': fxPickAmb(el.getAttribute('data-mode')); break
         case 'fx-r128-target': fxPickR128Target(el.getAttribute('data-lufs')); break
+        case 'fx-mastering': fxToggleMastering(); break
+        case 'fx-mb-preset': fxPickMasterPreset(el.getAttribute('data-id')); break
         case 'dg-enable': dgEnableLive(); break
         case 'fx-eq-flat': fxEqFlat(); break
         case 'fx-eq-reset-preset': fxEqResetPreset(); break

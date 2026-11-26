@@ -1,0 +1,83 @@
+/* ==========================================================================
+   v6.0 母带总线（Mastering Bus）UI 皮肤
+
+   只加样式，不改任何既有布局与控件尺寸：
+   1) 母带总开关打开后用蓝绿渐变，与音效/R128 的纯绿开关区分，一眼看出"这一项
+      是母带"；
+   2) 母带风格 chips 选中态用实心渐变 + 轻投影，四个风格 Clear / Warm / Punch /
+      Loud 在浅色卡片上更好认；
+   3) 四个母带滑杆（胶水 / 饱和 / 空气感 / 宽度）轨道换成渐变，滑块加一点尺寸
+      方便手指拖，触控区不改变行高；
+   4) 诊断面板新增的母带三项（母带状态 / 母带GR / 真峰值）用等宽数字 + 绿色描边，
+      和旧的削波/限幅标签区分开，方便扫读。
+   ========================================================================== */
+
+/* ---------------- 1. 母带总开关 ---------------- */
+#fxMastering[aria-pressed="true"] {
+  background: linear-gradient(135deg, #2bb3a3, #1f8f8a);
+}
+
+#fxMastering[aria-pressed="true"] i {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .26);
+}
+
+/* ---------------- 2. 母带风格 chips ---------------- */
+#fxMbPreset .fx-chip {
+  background: #f2f4f7;
+  transition: background .18s, color .18s, transform .12s;
+}
+
+#fxMbPreset .fx-chip.on {
+  background: linear-gradient(135deg, #1f8f8a, #16706d);
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 2px 6px rgba(22, 112, 109, .28);
+}
+
+#fxMbPreset .fx-chip:active {
+  transform: scale(.97);
+}
+
+/* ---------------- 3. 母带四个滑杆 ---------------- */
+#fxMbGlue,
+#fxMbSat,
+#fxMbAir,
+#fxMbWidth {
+  background: linear-gradient(90deg, #cfe9e5, #8fd3ca);
+}
+
+#fxMbGlue::-webkit-slider-thumb,
+#fxMbSat::-webkit-slider-thumb,
+#fxMbAir::-webkit-slider-thumb,
+#fxMbWidth::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  border-color: #1f8f8a;
+}
+
+/* 母带各段的读数：等宽数字，拖动时不抖 */
+#fxMbGlueVal,
+#fxMbSatVal,
+#fxMbAirVal,
+#fxMbWidthVal,
+#fxMbPresetNow {
+  font-variant-numeric: tabular-nums;
+  color: #1f8f8a;
+}
+
+/* 胶水压缩参数说明行：小一号灰字，避免与上面的读数抢视线 */
+#fxMbGlueNote {
+  color: var(--sub);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* ---------------- 4. 诊断面板母带三项 ---------------- */
+#dgMb,
+#dgMbGr,
+#dgTruePeak {
+  font-variant-numeric: tabular-nums;
+  border: 1px solid rgba(31, 143, 138, .35);
+  color: #16706d;
+  background: rgba(31, 143, 138, .08);
+}

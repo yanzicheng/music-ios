@@ -35,6 +35,7 @@
 <link rel="stylesheet" href="css/v56.css">
 <link rel="stylesheet" href="css/v57.css">
 <link rel="stylesheet" href="css/v58.css">
+<link rel="stylesheet" href="css/v60.css">
 </head>
 <body>
 
@@ -321,6 +322,9 @@
           <span class="dg-tag" id="dgHeadroom">余量 --</span>
           <span class="dg-tag" id="dgCorr">相关度 --</span>
           <span class="dg-tag" id="dgGain">补偿 --</span>
+          <span class="dg-tag" id="dgMb">母带 --</span>
+          <span class="dg-tag" id="dgMbGr">母带GR --</span>
+          <span class="dg-tag" id="dgTruePeak">真峰值 --</span>
         </div>
         <button class="dg-enable" id="dgEnable" type="button" data-act="dg-enable" hidden>开启实时测量</button>
       </div>
@@ -374,6 +378,43 @@
         <div class="fx-h">空间感 <span class="fx-h-sub" id="fxAmbVal">卷积 IR</span></div>
         <div class="fx-chips" id="fxAmb"></div>
         <div class="fx-note">卷积 IR 为内置合成脉冲响应；经典延迟是旧版 delay+feedback 假环绕</div>
+      </div>
+
+      <div class="fx-switch-row">
+        <div class="fx-switch-txt">
+          <b>母带处理 (Mastering Bus)</b>
+          <span id="fxMbText">关闭时原样通过，不参与着色</span>
+        </div>
+        <button class="fx-switch" id="fxMastering" type="button" data-act="fx-mastering" aria-pressed="false"><i></i></button>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">母带风格 <span class="fx-h-sub" id="fxMbPresetNow">Clear</span></div>
+        <div class="fx-chips" id="fxMbPreset"></div>
+        <div class="fx-note">低频收紧 @30Hz/120Hz 单声道 · 胶水压缩 · 存在感 3kHz · 空气感 12kHz · 并联饱和 · M/S 宽度</div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">胶水压缩 <span class="fx-h-sub" id="fxMbGlueVal">30%</span></div>
+        <input class="fx-range" id="fxMbGlue" type="range" min="0" max="100" step="1" value="30">
+        <div class="fx-note" id="fxMbGlueNote">-18dB / 6dB knee / 2:1 / 30ms / 250ms，轻压提升整体黏合度</div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">谐波饱和（并联） <span class="fx-h-sub" id="fxMbSatVal">20%</span></div>
+        <input class="fx-range" id="fxMbSat" type="range" min="0" max="100" step="1" value="20">
+        <div class="fx-note">tanh 软曲线并联混入，干声始终直通，只增密度不糊</div>
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">空气感 @12kHz <span class="fx-h-sub" id="fxMbAirVal">50%</span></div>
+        <input class="fx-range" id="fxMbAir" type="range" min="0" max="100" step="1" value="50">
+      </div>
+
+      <div class="fx-section">
+        <div class="fx-h">母带宽度 <span class="fx-h-sub" id="fxMbWidthVal">50%</span></div>
+        <input class="fx-range" id="fxMbWidth" type="range" min="0" max="100" step="1" value="50">
+        <div class="fx-note">与上方立体声宽度协同：反相内容不展宽，mid 同步补偿保证峰值不上升</div>
       </div>
 
       <div class="fx-switch-row">

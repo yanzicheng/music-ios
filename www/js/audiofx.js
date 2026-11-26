@@ -15,6 +15,12 @@
                                                         ↓
                               EBU R128 响度标准化（可选动态增益）
                                                         ↓
+             母带总线 Mastering Bus（v60 新增，可开关，关闭时纯增益直通）
+                 30Hz 高通 → 胶水压缩(-12~-24dB/1.5~4:1) → 轻度 makeup
+                 → 存在感架(2.5~4kHz) → 空气架(12kHz)
+                 → M/S：侧路 120Hz 高通（低频单声道化）+ 展宽 ≤+8% + mid 补偿
+                 → 并联 tanh 饱和（干湿混音，unit-slope 曲线）
+                                                        ↓
                     常开三级限幅：4ms 前视 → 压缩(-2.5dB/20:1) → 真峰值软钳(-1dBFS, 4x)
                                                         ↓
                                        master(淡入淡出) → 输出
@@ -88,6 +94,28 @@
   var CLIP_CEIL = 0.891    /* 软钳上限 = -1dBFS */
   var HEADROOM_MAX_DB = 10
 
+  /* ---- v60 母带总线（Mastering Bus）参数 ----
+     设计口径参照在线母带服务（LoopMastering）的几个可感知维度：低频收紧、胶水粘合、
+     存在感、空气感、密度饱和、立体声宽度、真峰值收口。全部用 Web Audio 原生节点拼装，
+     零依赖、零素材，不做离线渲染，处理延迟仅限限幅前视 4ms（母带本身无附加延迟）。 */
+  var MB_HP = 30              /* 母带入口高通：切次声，避免压缩器被 20Hz 以下能量带偏 */
+  var MB_MONO_HZ = 120        /* 侧路 120Hz 高通 = 120Hz 以下侧信号衰减，低频单声道化 */
+  var MB_AIR_FREQ = 12000     /* 空气感高架点：12kHz 以上"嘶"感，纯空气不刺耳 */
+  var MB_MAX_PRESENCE_DB = 1.5
+  var MB_MAX_AIR_DB = 3.0
+  var MB_MAX_SAT_WET = 0.30   /* 并联饱和湿声上限 */
+  var MB_MAX_WIDTH = 0.08     /* 母带 M/S 展宽上限 +8% */
+  var MB_GLUE_ATK = 0.03
+  var MB_GLUE_REL = 0.25
+
+  /* 母带风格预设：glue/sat/air/width 为 0~1 归一量，presence 为 dB、presenceFreq 为架点 */
+  var MASTER_PRESETS = {
+    clear: { name: '清晰', glue: 0.45, sat: 0.50, air: 0.66, width: 0.60, presence: 1.2, presenceFreq: 3200, makeup: 0.6 },
+    warm:  { name: '温暖', glue: 0.55, sat: 0.80, air: 0.40, width: 0.40, presence: 0.8, presenceFreq: 2500, makeup: 1.2 },
+    punch: { name: '冲击', glue: 0.50, sat: 0.45, air: 0.46, width: 0.50, presence: 1.5, presenceFreq: 3500, makeup: 1.4 },
+    loud:  { name: '响度', glue: 0.85, sat: 0.85, air: 0.83, width: 1.00, presence: 1.0, presenceFreq: 3000, makeup: 2.4 },
+  }
+
   var cfg = {
     enabled: false,
     preset: 'original',
@@ -102,6 +130,15 @@
     fade: 0,
     rate: 1,
     customPresets: {},
+    /* v60 母带总线：on 开关 + 风格预设 + 四个归一量参数（0~1） */
+    mastering: {
+      on: false,
+      preset: 'clear',
+      glue: MASTER_PRESETS.clear.glue,
+      sat: MASTER_PRESETS.clear.sat,
+      air: MASTER_PRESETS.clear.air,
+      width: MASTER_PRESETS.clear.width,
+    },
   }
 
   var audioEl = null
@@ -139,6 +176,16 @@
     headroomDb: 0,
     limReduction: 0,
     limActive: false,
+    /* v60 母带总线实时读数 */
+    mbApplied: false,
+    mbGr: 0,
+    mbActive: false,
+    mbGlue: 0,
+    mbSat: 0,
+    mbAirDb: 0,
+    mbPresenceDb: 0,
+    mbMakeupDb: 0,
+    mbWidth: 0,
     bufL: null,
     bufR: null,
     bufOL: null,
@@ -172,6 +219,14 @@
       fade: cfg.fade,
       rate: cfg.rate,
       customPresets: JSON.parse(JSON.stringify(cfg.customPresets || {})),
+      mastering: {
+        on: !!cfg.mastering.on,
+        preset: cfg.mastering.preset,
+        glue: cfg.mastering.glue,
+        sat: cfg.mastering.sat,
+        air: cfg.mastering.air,
+        width: cfg.mastering.width,
+      },
     }
   }
 
@@ -251,6 +306,37 @@
       curve[i] = Math.tanh(k * x) / denom
     }
     return curve
+  }
+
+  /* 母带并联饱和曲线：y = tanh(k·x) / k
+     —— 与激励器曲线的关键差别是"单位斜率"：x→0 时 y'≈1，即小信号经过曲线后
+     电平不变（激励器用 tanh(k·x)/tanh(k) 是"满量程归一"，小信号会被放大 k 倍，
+     并联混进主路会直接抬高响度、把低电平细节顶出来）。这里小信号透明，
+     只有峰值部分被 tanh 压弯产生偶次/奇次谐波，并联混音后是"加密度不加音量"。
+     k 固定 3：k 越大谐波越多但越容易在高频产生毛刺，3 是听感与干净度的折中。 */
+  function makeSatCurve(k) {
+    var n = 4096
+    var curve = new Float32Array(n)
+    var kk = k > 0 ? k : 3
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * 2 - 1
+      curve[i] = Math.tanh(kk * x) / kk
+    }
+    return curve
+  }
+
+  /* 母带风格预设与参数映射：把 0~1 的归一量换成具体 dB / 比例 */
+  function masterPreset() {
+    return MASTER_PRESETS[cfg.mastering.preset] || MASTER_PRESETS.clear
+  }
+  /* 胶水压缩：glue 0→阈值 -12dB/1.5:1（几乎不压），1→-24dB/4:1（明显粘合） */
+  function masterGlueThreshold(g) { return -12 - 12 * clamp(g, 0, 1) }
+  function masterGlueRatio(g) { return 1.5 + 2.5 * clamp(g, 0, 1) }
+  /* 胶水压缩当前衰减量：优先读节点实时值（旧 WebView 不暴露 reduction 时退回 tick 里缓存的读数） */
+  function masterGrDb() {
+    if (!meter.mbApplied) return 0
+    if (nodes && nodes.mbGlue && typeof nodes.mbGlue.reduction === 'number') return nodes.mbGlue.reduction
+    return meter.mbGr || 0
   }
 
   /* 末端真峰值软钳曲线：
@@ -412,6 +498,77 @@
       nodes.clip.curve = makeClipCurve()
       nodes.clip.oversample = '4x'
 
+      /* ---- v60 母带总线（Mastering Bus）----
+         位置：R128 响度之后、末级限幅之前（母带是"最后一公里"的着色与响度整合，
+         必须让限幅器看到母带增益，才能保证 -1dBFS 硬上限不被冲破）。
+         关闭时 mbDry=1 / mbWet=0：信号只是一个增益为 1 的 GainNode，零着色零附加延迟；
+         开启时 mbDry=0 / mbWet=1：信号走完整母带链。两者都汇入 laDelay，切换用
+         30ms setTargetAtTime 交叉淡化，不会爆音也不会中断播放。 */
+      nodes.mbDry = ctx.createGain(); nodes.mbDry.gain.value = 1
+      nodes.mbWet = ctx.createGain(); nodes.mbWet.gain.value = 0
+      nodes.mbIn = ctx.createGain(); nodes.mbIn.gain.value = 1
+      nodes.mbOut = ctx.createGain(); nodes.mbOut.gain.value = 1
+
+      /* ① 低频收紧之一：入口 30Hz 二阶高通，先把次声/直流切掉，
+            否则低频能量会把胶水压缩器带偏（一压全曲，中高频跟着抽） */
+      nodes.mbHp = ctx.createBiquadFilter()
+      nodes.mbHp.type = 'highpass'
+      nodes.mbHp.frequency.value = MB_HP
+      nodes.mbHp.Q.value = 0.7071
+
+      /* ② 总线胶水压缩：慢 attack（30ms，放过瞬态保住"冲击"）+ 中慢 release（250ms，
+            让总线轻微"呼吸"粘在一起），knee 6dB 软拐点，不做激进限幅 */
+      nodes.mbGlue = ctx.createDynamicsCompressor()
+      nodes.mbGlue.threshold.value = masterGlueThreshold(cfg.mastering.glue)
+      nodes.mbGlue.knee.value = 6
+      nodes.mbGlue.ratio.value = masterGlueRatio(cfg.mastering.glue)
+      nodes.mbGlue.attack.value = MB_GLUE_ATK
+      nodes.mbGlue.release.value = MB_GLUE_REL
+
+      nodes.mbMakeup = ctx.createGain()
+      nodes.mbMakeup.gain.value = 1
+
+      /* ③ 存在感（2.5~4kHz 高架，抓咬字与鼓皮）+ 空气感（12kHz 宽 Q 高架，
+            纯"空气"不刺耳）。都用 highshelf，相位特性温和，不会像 peaking 堆高 Q 那样
+            在瞬态上产生"啾"声 */
+      nodes.mbPresence = ctx.createBiquadFilter()
+      nodes.mbPresence.type = 'highshelf'
+      nodes.mbPresence.frequency.value = masterPreset().presenceFreq
+      nodes.mbPresence.gain.value = 0
+
+      nodes.mbAir = ctx.createBiquadFilter()
+      nodes.mbAir.type = 'highshelf'
+      nodes.mbAir.frequency.value = MB_AIR_FREQ
+      nodes.mbAir.Q.value = 0.6
+      nodes.mbAir.gain.value = 0
+
+      /* ④ M/S：侧路 120Hz 高通 = 低频单声道化（底鼓/贝斯更实、能量集中）；
+            展宽只动侧路，mid 同步补偿，保证重建后峰值不随宽度上升（不与前面
+            的宽度模块叠加出相位抵消）。宽度按相关度收缩，反相内容不展宽。 */
+      nodes.mbSplit = ctx.createChannelSplitter(2)
+      nodes.mbMerge = ctx.createChannelMerger(2)
+      nodes.mbMidL = ctx.createGain(); nodes.mbMidL.gain.value = 0.5
+      nodes.mbMidR = ctx.createGain(); nodes.mbMidR.gain.value = 0.5
+      nodes.mbSideL = ctx.createGain(); nodes.mbSideL.gain.value = 0.5
+      nodes.mbSideR = ctx.createGain(); nodes.mbSideR.gain.value = -0.5
+      nodes.mbMidSum = ctx.createGain(); nodes.mbMidSum.gain.value = 1
+      nodes.mbSideSum = ctx.createGain(); nodes.mbSideSum.gain.value = 1
+      nodes.mbSideHp = ctx.createBiquadFilter()
+      nodes.mbSideHp.type = 'highpass'
+      nodes.mbSideHp.frequency.value = MB_MONO_HZ
+      nodes.mbSideHp.Q.value = 0.7071
+      nodes.mbMidG = ctx.createGain(); nodes.mbMidG.gain.value = 1
+      nodes.mbSideG = ctx.createGain(); nodes.mbSideG.gain.value = 1
+      nodes.mbSideNeg = ctx.createGain(); nodes.mbSideNeg.gain.value = -1
+
+      /* ⑤ 并联谐波饱和：干声直通 + 湿声经 unit-slope tanh（4x 过采样防混叠），
+            wet=0 时与"未加饱和"完全等价，因此开关与滑杆都不会改变基础音色 */
+      nodes.mbSatDrive = ctx.createGain(); nodes.mbSatDrive.gain.value = 1
+      nodes.mbSatShape = ctx.createWaveShaper()
+      nodes.mbSatShape.curve = makeSatCurve(3)
+      nodes.mbSatShape.oversample = '4x'
+      nodes.mbSatWet = ctx.createGain(); nodes.mbSatWet.gain.value = 0
+
       nodes.master = ctx.createGain()
       nodes.master.gain.value = 1
 
@@ -471,9 +628,45 @@
       nodes.side.connect(nodes.gSn)
       nodes.gSn.connect(nodes.wMerge, 0, 1)
 
-      /* 响度 → 前视 → 压缩 → 真峰值软钳 → 淡入淡出 → 输出 */
+      /* 响度 → 母带总线 → 前视 → 压缩 → 真峰值软钳 → 淡入淡出 → 输出 */
       nodes.wMerge.connect(nodes.loud)
-      nodes.loud.connect(nodes.laDelay)
+
+      /* 母带关闭：loud → mbDry(1) → laDelay（纯增益节点，零着色）
+         母带开启：loud → mbIn → 母带链 → mbOut → mbWet(1) → laDelay */
+      nodes.loud.connect(nodes.mbDry)
+      nodes.mbDry.connect(nodes.laDelay)
+      nodes.loud.connect(nodes.mbIn)
+      nodes.mbIn.connect(nodes.mbHp)
+      nodes.mbHp.connect(nodes.mbGlue)
+      nodes.mbGlue.connect(nodes.mbMakeup)
+      nodes.mbMakeup.connect(nodes.mbPresence)
+      nodes.mbPresence.connect(nodes.mbAir)
+      nodes.mbAir.connect(nodes.mbSplit)
+      nodes.mbSplit.connect(nodes.mbMidL, 0)
+      nodes.mbSplit.connect(nodes.mbSideL, 0)
+      nodes.mbSplit.connect(nodes.mbMidR, 1)
+      nodes.mbSplit.connect(nodes.mbSideR, 1)
+      nodes.mbMidL.connect(nodes.mbMidSum)
+      nodes.mbMidR.connect(nodes.mbMidSum)
+      nodes.mbSideL.connect(nodes.mbSideSum)
+      nodes.mbSideR.connect(nodes.mbSideSum)
+      /* 侧路只走 120Hz 高通后的信号：120Hz 以下的侧信息被丢弃 = 低频单声道化 */
+      nodes.mbSideSum.connect(nodes.mbSideHp)
+      nodes.mbSideHp.connect(nodes.mbSideG)
+      nodes.mbMidSum.connect(nodes.mbMidG)
+      nodes.mbSideG.connect(nodes.mbMerge, 0, 0)
+      nodes.mbSideG.connect(nodes.mbSideNeg)
+      nodes.mbSideNeg.connect(nodes.mbMerge, 0, 1)
+      nodes.mbMidG.connect(nodes.mbMerge, 0, 0)
+      nodes.mbMidG.connect(nodes.mbMerge, 0, 1)
+      nodes.mbMerge.connect(nodes.mbOut)
+      nodes.mbMerge.connect(nodes.mbSatDrive)
+      nodes.mbSatDrive.connect(nodes.mbSatShape)
+      nodes.mbSatShape.connect(nodes.mbSatWet)
+      nodes.mbSatWet.connect(nodes.mbOut)
+      nodes.mbOut.connect(nodes.mbWet)
+      nodes.mbWet.connect(nodes.laDelay)
+
       nodes.laDelay.connect(nodes.comp)
       nodes.comp.connect(nodes.clip)
       nodes.clip.connect(nodes.master)
@@ -760,6 +953,16 @@
         meter.limActive = red < -0.2
       }
 
+      /* 母带胶水压缩 GR：同理读 DynamicsCompressor.reduction（旧 WebView 可能不暴露，先判类型） */
+      if (cfg.mastering.on && nodes.mbGlue && typeof nodes.mbGlue.reduction === 'number') {
+        var mbRed = nodes.mbGlue.reduction
+        meter.mbGr = mbRed
+        meter.mbActive = mbRed < -0.2
+      } else if (!cfg.mastering.on) {
+        meter.mbGr = 0
+        meter.mbActive = false
+      }
+
       /* 声道相关度 = (Em - Es) / (Em + Es) */
       if (nodes.aMid && nodes.aSide) {
         if (!meter.bufMid) {
@@ -808,6 +1011,9 @@
     meter.widthFactor = 1
     meter.limReduction = 0
     meter.limActive = false
+    meter.mbGr = 0
+    meter.mbActive = false
+    meter.mbApplied = false
     if (nodes && nodes.loud && ctx) nodes.loud.gain.setTargetAtTime(1, ctx.currentTime, 0.05)
   }
 
@@ -824,6 +1030,87 @@
       else nodes.src.connect(nodes.pre)
     } catch (e) { console.warn('[AudioFX] 旁路切换失败', e) }
     bypassed = bypass
+  }
+
+  /* ---------------- 母带总线参数下发 ----------------
+     use = 音效开着（非无损直通）且母带开关打开。
+     关闭时 mbDry=1 / mbWet=0，信号只经过一个增益为 1 的节点，与"没有母带模块"等价。 */
+  function applyMastering(t, on) {
+    if (!nodes || !nodes.mbIn || !nodes.mbDry || !nodes.mbWet) return
+    var mb = cfg.mastering
+    var use = !!on && !!mb.on
+
+    /* 30ms 交叉淡化：开关母带时不会出现电平跳变/爆音 */
+    nodes.mbDry.gain.setTargetAtTime(use ? 0 : 1, t, 0.03)
+    nodes.mbWet.gain.setTargetAtTime(use ? 1 : 0, t, 0.03)
+
+    if (!use) {
+      meter.mbApplied = false
+      meter.mbGr = 0
+      meter.mbActive = false
+      meter.mbGlue = 0
+      meter.mbSat = 0
+      meter.mbAirDb = 0
+      meter.mbPresenceDb = 0
+      meter.mbMakeupDb = 0
+      meter.mbWidth = 0
+      /* 湿路也回到中性，保证下次开启时不会突然带上旧值 */
+      nodes.mbSatWet.gain.setTargetAtTime(0, t, 0.03)
+      nodes.mbPresence.gain.setTargetAtTime(0, t, 0.03)
+      nodes.mbAir.gain.setTargetAtTime(0, t, 0.03)
+      nodes.mbMakeup.gain.setTargetAtTime(1, t, 0.03)
+      nodes.mbSideG.gain.setTargetAtTime(1, t, 0.03)
+      nodes.mbSideNeg.gain.setTargetAtTime(-1, t, 0.03)
+      nodes.mbMidG.gain.setTargetAtTime(1, t, 0.03)
+      return
+    }
+
+    var mp = masterPreset()
+    var g = clamp(mb.glue, 0, 1)
+    var thr = masterGlueThreshold(g)
+    var ratio = masterGlueRatio(g)
+    nodes.mbGlue.threshold.setTargetAtTime(thr, t, 0.05)
+    nodes.mbGlue.knee.setTargetAtTime(6, t, 0.05)
+    nodes.mbGlue.ratio.setTargetAtTime(ratio, t, 0.05)
+    nodes.mbGlue.attack.setTargetAtTime(MB_GLUE_ATK, t, 0.05)
+    nodes.mbGlue.release.setTargetAtTime(MB_GLUE_REL, t, 0.05)
+
+    /* makeup 只做"补回被压掉的响度"，上限 3dB；超出部分交给末级限幅，不在这里硬抬 */
+    var makeupDb = clamp(mp.makeup || 0, 0, 3)
+    nodes.mbMakeup.gain.setTargetAtTime(dbToGain(makeupDb), t, 0.05)
+
+    var presDb = clamp(mp.presence || 0, 0, MB_MAX_PRESENCE_DB)
+    var presFreq = clamp(mp.presenceFreq || 3000, 2000, 4000)
+    nodes.mbPresence.frequency.setTargetAtTime(presFreq, t, 0.05)
+    nodes.mbPresence.gain.setTargetAtTime(presDb, t, 0.05)
+
+    var airDb = clamp(clamp(mb.air, 0, 1) * MB_MAX_AIR_DB, 0, MB_MAX_AIR_DB)
+    nodes.mbAir.gain.setTargetAtTime(airDb, t, 0.05)
+
+    nodes.mbHp.frequency.setTargetAtTime(MB_HP, t, 0.05)
+    nodes.mbSideHp.frequency.setTargetAtTime(MB_MONO_HZ, t, 0.05)
+
+    /* 展宽：受相关度约束（反相内容不展宽），并同步压低 mid 保证峰值不上升 */
+    var wf = widthFactor()
+    var wb = clamp(mb.width, 0, 1) * MB_MAX_WIDTH * wf
+    var sideG = 1 + wb
+    var midG = 1 / (1 + 0.55 * wb)
+    nodes.mbSideG.gain.setTargetAtTime(sideG, t, 0.05)
+    nodes.mbSideNeg.gain.setTargetAtTime(-sideG, t, 0.05)
+    nodes.mbMidG.gain.setTargetAtTime(midG, t, 0.05)
+
+    /* 并联饱和：drive 1~1.8 推入曲线，湿声 ≤0.30，干声始终直通 */
+    var sat = clamp(mb.sat, 0, 1)
+    nodes.mbSatDrive.gain.setTargetAtTime(1 + sat * 0.8, t, 0.05)
+    nodes.mbSatWet.gain.setTargetAtTime(sat * MB_MAX_SAT_WET, t, 0.05)
+
+    meter.mbApplied = true
+    meter.mbGlue = g
+    meter.mbSat = sat
+    meter.mbAirDb = airDb
+    meter.mbPresenceDb = presDb
+    meter.mbMakeupDb = makeupDb
+    meter.mbWidth = wb
   }
 
   function apply() {
@@ -867,6 +1154,9 @@
 
       /* 宽度矩阵（含 mid 补偿） */
       applyWidth(t)
+
+      /* 母带总线：在 R128 响度之后、限幅之前着色与整合响度 */
+      applyMastering(t, on)
 
       /* 限幅器常开：与 R128 无关，参数固定，末端 -1dBFS 是硬上限 */
       nodes.comp.threshold.setTargetAtTime(LIMIT_THRESHOLD, t, 0.05)
@@ -912,6 +1202,7 @@
     PRESETS: PRESETS,
     AMB_MODES: AMB_MODES,
     R128_TARGETS: R128_TARGETS,
+    MASTER_PRESETS: MASTER_PRESETS,
 
     /** 载入持久化配置（不建链，避免未开音效时被 AudioContext 挂起影响出声） */
     load: function (saved) {
@@ -930,6 +1221,17 @@
         cfg.fade = clamp(saved.fade || 0, 0, 5)
         cfg.rate = clamp(saved.rate || 1, 0.5, 2)
         cfg.customPresets = saved.customPresets && typeof saved.customPresets === 'object' ? saved.customPresets : {}
+        /* v60 母带总线：缺字段时回落到 clear 预设的默认值，保证老配置升级后不炸 */
+        var sm = saved.mastering && typeof saved.mastering === 'object' ? saved.mastering : {}
+        var smp = MASTER_PRESETS[sm.preset] ? sm.preset : 'clear'
+        cfg.mastering = {
+          on: !!sm.on,
+          preset: smp,
+          glue: clamp(sm.glue === undefined ? MASTER_PRESETS[smp].glue : sm.glue, 0, 1),
+          sat: clamp(sm.sat === undefined ? MASTER_PRESETS[smp].sat : sm.sat, 0, 1),
+          air: clamp(sm.air === undefined ? MASTER_PRESETS[smp].air : sm.air, 0, 1),
+          width: clamp(sm.width === undefined ? MASTER_PRESETS[smp].width : sm.width, 0, 1),
+        }
       }
       if (audioEl && cfg.enabled) { build(); resume(); apply() }
       return cloneCfg()
@@ -953,6 +1255,65 @@
       apply()
       persist()
       return cfg.enabled
+    },
+
+    /** 母带总线开关：关闭时信号只过一个增益为 1 的节点，与没有母带模块等价 */
+    setMastering: function (on) {
+      cfg.mastering.on = !!on
+      /* 母带只能在音效链里生效：单独打开母带时自动把音效链一并打开，语义更直观 */
+      if (cfg.mastering.on && !cfg.enabled) cfg.enabled = true
+      if (cfg.enabled) { build(); resume() }
+      apply()
+      persist()
+      return cfg.mastering.on
+    },
+
+    /** 母带风格预设（Clear / Warm / Punch / Loud）：会覆盖四个归一量参数 */
+    setMasterPreset: function (key) {
+      var p = MASTER_PRESETS[key]
+      if (!p) return false
+      cfg.mastering.preset = key
+      cfg.mastering.glue = p.glue
+      cfg.mastering.sat = p.sat
+      cfg.mastering.air = p.air
+      cfg.mastering.width = p.width
+      cfg.mastering.on = true
+      if (!cfg.enabled) cfg.enabled = true
+      build()
+      resume()
+      apply()
+      persist()
+      return true
+    },
+
+    /** 单项母带参数：glue(胶水) / sat(饱和) / air(空气感) / width(宽度)，取值 0~1 */
+    setMasterParam: function (key, v) {
+      if (['glue', 'sat', 'air', 'width'].indexOf(key) < 0) return false
+      cfg.mastering[key] = clamp(v, 0, 1)
+      cfg.mastering.on = true
+      if (!cfg.enabled) cfg.enabled = true
+      build()
+      resume()
+      apply()
+      persist()
+      return cfg.mastering[key]
+    },
+
+    /** 母带当前参数快照（供 UI 同步滑杆与按钮态） */
+    mastering: function () {
+      var mp = masterPreset()
+      return {
+        on: !!cfg.mastering.on,
+        preset: cfg.mastering.preset,
+        presetName: mp.name,
+        glue: cfg.mastering.glue,
+        sat: cfg.mastering.sat,
+        air: cfg.mastering.air,
+        width: cfg.mastering.width,
+        presenceDb: mp.presence,
+        presenceFreq: mp.presenceFreq,
+        makeupDb: mp.makeup,
+      }
     },
 
     /** 切预设（预设只覆盖 EQ/低音/宽度/空间，不覆盖淡入淡出与速度） */
@@ -1179,6 +1540,35 @@
           lookaheadMs: LOOKAHEAD * 1000,
         },
         headroomDb: meter.headroomDb,
+        /* 母带总线诊断：on=用户开关，applied=此刻确实在处理（音效开着且母带开着），
+           grDb 为胶水压缩当前衰减量，truePeakHoldDb 为总输出峰值保持（-1dBFS 为顶） */
+        mastering: {
+          on: !!cfg.mastering.on,
+          applied: !!meter.mbApplied,
+          preset: cfg.mastering.preset,
+          presetName: masterPreset().name,
+          glue: cfg.mastering.glue,
+          glueThresholdDb: masterGlueThreshold(cfg.mastering.glue),
+          glueRatio: masterGlueRatio(cfg.mastering.glue),
+          glueAttackMs: MB_GLUE_ATK * 1000,
+          glueReleaseMs: MB_GLUE_REL * 1000,
+          grDb: masterGrDb(),
+          active: masterGrDb() < -0.2,
+          sat: cfg.mastering.sat,
+          satWet: clamp(cfg.mastering.sat, 0, 1) * MB_MAX_SAT_WET,
+          air: cfg.mastering.air,
+          airDb: meter.mbAirDb,
+          airFreq: MB_AIR_FREQ,
+          presenceDb: meter.mbPresenceDb,
+          presenceFreq: masterPreset().presenceFreq,
+          width: cfg.mastering.width,
+          widthBoost: meter.mbWidth,
+          monoHz: MB_MONO_HZ,
+          hpHz: MB_HP,
+          makeupDb: meter.mbMakeupDb,
+          ceilingDb: gainToDb(CLIP_CEIL),
+          truePeakHoldDb: gainToDb(meter.peakHold),
+        },
         level: {
           l: gainToDb(meter.rmsL),
           r: gainToDb(meter.rmsR),
