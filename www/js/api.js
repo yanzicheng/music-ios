@@ -19,11 +19,15 @@
   var LS_KEY = 'lx.apiBase'
   var PROBE_PATH = '/api/health'
 
-  var PROBE_TIMEOUT = 3500     /* 单次探测超时（WebView 内首个请求需初始化网络栈，实测可达约 2 秒，故放宽） */
-  var PROBE_INTERVAL = 600     /* 轮询间隔 */
-  var PROBE_WINDOW = 18000     /* 冷启动轮询总窗口 */
+  /* v55（真机问题 5）：连接本地服务慢的根因是"单个探测等 3.5 秒、失败还要再等 600ms"，
+     nodejs-mobile 服务端在真机上冷启动约 0.4~1.5 秒，这段时间内第一次探测必然超时，
+     用户就会盯着"正在连接本地服务…"很久。
+     改成短超时 + 密轮询：单次 1.6 秒，每 300 毫秒重试一次，服务一就绪立刻命中。 */
+  var PROBE_TIMEOUT = 1600     /* 单次探测超时 */
+  var PROBE_INTERVAL = 300     /* 轮询间隔 */
+  var PROBE_WINDOW = 12000     /* 冷启动轮询总窗口 */
   var REQUEST_TIMEOUT = 20000  /* 业务请求超时（含远端音源解析） */
-  var RETRY_WINDOW = 8000      /* 请求失败后重新探测的窗口，避免用户干等 */
+  var RETRY_WINDOW = 5000      /* 请求失败后重新探测的窗口，避免用户干等 */
 
   var FALLBACK_CANDIDATES = [
     'http://10.0.2.2:34200',

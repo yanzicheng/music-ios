@@ -1,0 +1,295 @@
+/* ==========================================================================
+   v55 补丁（iOS 真机 8 项体验问题）
+   1) 顶部安全区兜底：WKWebView 里 env(safe-area-inset-top) 可能返回 0，
+      旧样式把 padding-top 塞进固定 height 的头部盒子里，导致「音质/音效」Tab
+      上移压住返回键与重置音效按钮（图 1）
+   2) 播放页控件：上一首/下一首换成矢量图标后统一尺寸，进度条加粗加高命中区，
+      时间文字提高对比度（图 3 的「控件半透明无法辨识 / 进度条失灵」）
+   3) 迷你播放条与底部标签栏：按钮不再挤压溢出（图 2）
+   4) 刷歌页：恢复进度条时间显示，暂停徽标改为无底色（问题 7）
+   5) 全局按压反馈：iOS 无震动 API，用缩放/高亮 + 水波纹做等效触感（问题 3）
+   ========================================================================== */
+
+/* ---------------- 0. 基础变量兜底 ---------------- */
+:root {
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-t-min: 44px;              /* 兜底：至少给状态栏/灵动岛留出空间 */
+  --tab-h: 52px;
+  --foot-h: calc(var(--tab-h) + max(var(--safe-b), 10px));
+}
+
+/* WKWebView 若拿不到安全区，用下限保证内容不被状态栏和 Home 指示条压住 */
+html, body { -webkit-tap-highlight-color: transparent; }
+
+/* ==========================================================================
+   1. 音质音效面板头部（图 1）
+   ========================================================================== */
+#soundPanel .sp-head {
+  height: auto !important;
+  min-height: 52px !important;
+  padding: 0 12px 0 !important;
+  padding-top: max(calc(var(--safe-t) + 6px), var(--safe-t-min)) !important;
+  padding-bottom: 6px !important;
+  gap: 6px !important;
+  align-items: center !important;
+}
+
+.sp-back {
+  width: 40px !important;
+  height: 40px !important;
+  flex: 0 0 40px !important;
+}
+.sp-back .icon { width: 24px !important; height: 24px !important; }
+
+.sp-title {
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  line-height: 1.2 !important;
+  text-align: center !important;
+}
+
+/* 重置音效：给足点击区，且不再被 Tab 顶上来压住 */
+.sp-reset {
+  flex: 0 0 auto !important;
+  height: 32px !important;
+  padding: 0 8px !important;
+  margin-left: 2px !important;
+  border-radius: 16px !important;
+  background: rgba(0, 0, 0, .045) !important;
+  font-size: 12.5px !important;
+  line-height: 1 !important;
+  color: var(--text-2) !important;
+}
+
+/* Tab 区与头部之间留出明确间距，杜绝遮挡 */
+#soundPanel .sp-tabs {
+  padding: 8px 14px 12px !important;
+  gap: 10px !important;
+}
+#soundPanel .sp-tab {
+  height: 34px !important;
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  font-size: 13.5px !important;
+}
+#soundPanel .sp-scroll {
+  padding-bottom: max(calc(var(--safe-b) + 16px), 20px) !important;
+}
+
+/* ==========================================================================
+   2. 播放页（图 3）
+   ========================================================================== */
+#player .p-wrap {
+  padding-top: max(calc(var(--safe-t) + 6px), var(--safe-t-min)) !important;
+  padding-bottom: max(calc(var(--safe-b) + 12px), 18px) !important;
+}
+
+/* 返回/收起箭头：加大命中区与图标 */
+#player .p-ico {
+  width: 44px !important;
+  height: 44px !important;
+  flex: 0 0 44px !important;
+  color: #fff !important;
+}
+#player .p-ico .icon { width: 26px !important; height: 26px !important; }
+
+/* 控制键：上一首/下一首改用 symbol 图标后统一尺寸与不透明度 */
+#player .p-ctrl-btn {
+  width: 56px !important;
+  height: 56px !important;
+  color: #fff !important;
+  opacity: 1 !important;
+}
+#player .p-ctrl-btn .icon,
+#player .p-ctrl-btn .ctrl-ico { width: 30px !important; height: 30px !important; }
+#player .p-ctrl-btn.pressed { opacity: .62 !important; }
+
+#player .p-icon-btn { color: rgba(255, 255, 255, .9) !important; }
+#player .p-icon-btn .icon { width: 22px !important; height: 22px !important; }
+
+#player .p-play {
+  width: 68px !important;
+  height: 68px !important;
+  flex: 0 0 68px !important;
+  box-shadow: 0 8px 22px rgba(49, 194, 124, .45) !important;
+}
+#player .p-play .icon { width: 30px !important; height: 30px !important; }
+
+/* 进度条：加高命中区、加粗线、放大滑块，时间文字提高可读性 */
+#player .p-bar-row { gap: 10px !important; }
+#player .bar { height: 36px !important; }
+#player .bar-line { height: 4px !important; background: rgba(255, 255, 255, .3) !important; }
+#player .bar-fill { height: 4px !important; }
+#player .bar-knob {
+  width: 13px !important;
+  height: 13px !important;
+  margin-left: -6.5px !important;
+  transform: scale(1) !important;
+}
+#player .bar.dragging .bar-knob { transform: scale(1.3) !important; }
+#player .p-time {
+  font-size: 11.5px !important;
+  width: 42px !important;
+  opacity: .92 !important;
+  color: #fff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+}
+
+/* 底部功能栏：文字与图标不再发灰 */
+#player .p-act { color: rgba(255, 255, 255, .92) !important; font-size: 11px !important; }
+#player .p-act .icon { width: 23px !important; height: 23px !important; }
+
+/* ==========================================================================
+   3. 迷你播放条 + 底部标签栏（图 2）
+   ========================================================================== */
+#mini { padding: 0 10px !important; }
+#mini .mini-main { gap: 8px !important; }
+#mini .mini-cover {
+  width: 40px !important;
+  height: 40px !important;
+  flex: 0 0 40px !important;
+}
+#mini .mini-name { font-size: 13px !important; }
+#mini .mini-btn {
+  width: 34px !important;
+  flex: 0 0 34px !important;
+  margin-left: 0 !important;
+}
+#mini .mini-btn .icon { width: 20px !important; height: 20px !important; }
+/* 收藏钮保留（别在迷你条里丢掉功能），只把宽度收窄避免右侧被挤断 */
+#mini .mini-btn.mini-fav { width: 32px !important; flex: 0 0 32px !important; }
+#mini #miniQueue { width: 30px !important; flex: 0 0 30px !important; }
+
+#tabbar {
+  height: var(--foot-h) !important;
+  padding-bottom: max(var(--safe-b), 10px) !important;
+  box-sizing: border-box !important;
+}
+#tabbar .tab { gap: 2px !important; }
+#tabbar .tab .tab-ico,
+#tabbar .tab .icon {
+  width: 23px !important;
+  height: 23px !important;
+  color: inherit !important;
+  fill: currentColor !important;
+  display: block;
+}
+
+/* ==========================================================================
+   4. 刷歌页（问题 7）
+   ========================================================================== */
+.page[data-page="swipe"] .swipe-prog {
+  height: auto !important;
+  min-height: 34px !important;
+  padding: 0 26px 2px !important;
+  margin: 8px 0 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+  box-sizing: border-box !important;
+  overflow: visible !important;
+}
+
+.page[data-page="swipe"] .swipe-prog-bar {
+  position: relative !important;
+  width: 100% !important;
+  height: 4px !important;
+  border-radius: 2px !important;
+  background: rgba(255, 255, 255, .28) !important;
+  overflow: visible !important;
+}
+
+/* v46 曾把时间行隐藏，这里强制恢复左右两端时间 */
+.page[data-page="swipe"] .swipe-prog-t {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 1px !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+  color: rgba(255, 255, 255, .82) !important;
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: .2px !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, .5);
+}
+.page[data-page="swipe"] .swipe-prog-t > * {
+  min-width: 36px !important;
+  white-space: nowrap !important;
+}
+.page[data-page="swipe"] .swipe-prog-t > *:last-child { text-align: right !important; }
+
+/* 喜欢/收藏与进度条之间的呼吸位 */
+.page[data-page="swipe"] .swipe-actions {
+  margin: 0 0 4px !important;
+  padding-bottom: 0 !important;
+}
+
+/* v46 曾给控制键 -15px 上移去补"时间行被隐藏"的坑；时间行既然恢复，
+   这里的负 margin 会把控制键顶到时间文字上，必须归零 */
+.page[data-page="swipe"] .swipe-ctrl {
+  margin-top: 0 !important;
+}
+
+/* 暂停徽标：去底色、去模糊，只留一枚清晰的播放三角 */
+.page[data-page="swipe"] .swipe-pause-badge {
+  width: 56px !important;
+  height: 56px !important;
+  margin: -28px 0 0 -28px !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.page[data-page="swipe"] .swipe-pause-badge .icon {
+  width: 40px !important;
+  height: 40px !important;
+  margin-left: 4px !important;
+  color: #fff !important;
+  fill: currentColor !important;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, .55)) !important;
+}
+
+/* ==========================================================================
+   5. 全局按压反馈（问题 3）
+   iOS WKWebView 不支持 navigator.vibrate，用视觉按压 + 水波纹替代
+   ========================================================================== */
+.song, .cell, .card, .swipe-toggle, .sp-tab, #tabbar .tab, .mini-btn,
+.p-act, .swipe-cover, .sw-act, .quick, .cat, .hcard {
+  position: relative;
+  overflow: hidden;
+  transition: transform .12s ease, opacity .12s ease, background-color .12s ease;
+}
+
+.is-press {
+  transform: scale(.965) !important;
+  opacity: .82 !important;
+}
+.song.is-press, .cell.is-press, .card.is-press {
+  background-color: rgba(0, 0, 0, .035) !important;
+}
+#tabbar .tab.is-press { transform: scale(.92) !important; }
+.p-play.is-press { transform: scale(.9) !important; }
+
+.mv-ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(49, 194, 124, .34) 0%, rgba(49, 194, 124, .12) 55%, transparent 72%);
+  transform: translate(-50%, -50%) scale(0);
+  animation: mvRipple .55s ease-out forwards;
+  z-index: 3;
+}
+#player .mv-ripple {
+  background: radial-gradient(circle, rgba(255, 255, 255, .34) 0%, rgba(255, 255, 255, .12) 55%, transparent 72%);
+}
+@keyframes mvRipple {
+  to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+}

@@ -31,6 +31,7 @@
 <link rel="stylesheet" href="css/v52.css">
 <link rel="stylesheet" href="css/v53.css">
 <link rel="stylesheet" href="css/v54.css">
+<link rel="stylesheet" href="css/v55.css">
 </head>
 <body>
 
@@ -138,13 +139,13 @@
 
   <nav id="tabbar" role="tablist">
     <button class="tab active" type="button" data-tab="home" role="tab" aria-selected="true">
-      <span class="mi mi-tab-home"></span><span class="tab-t">首页</span>
+      <svg class="icon tab-ico"><use href="#i-home"></use></svg><span class="tab-t">首页</span>
     </button>
     <button class="tab" type="button" data-tab="swipe" role="tab" aria-selected="false">
-      <span class="mi mi-tab-swipe"></span><span class="tab-t">刷歌</span>
+      <svg class="icon tab-ico"><use href="#i-compass"></use></svg><span class="tab-t">刷歌</span>
     </button>
     <button class="tab" type="button" data-tab="mine" role="tab" aria-selected="false">
-      <span class="mi mi-tab-mine"></span><span class="tab-t">我的</span>
+      <svg class="icon tab-ico"><use href="#i-user"></use></svg><span class="tab-t">我的</span>
     </button>
   </nav>
 </div>
@@ -251,9 +252,9 @@
 
       <div class="p-ctrl">
         <button class="p-icon-btn" id="btnMode" type="button" data-act="cycle-mode" aria-label="播放模式"><svg class="icon"><use href="#i-order"></use></svg></button>
-        <button class="p-ctrl-btn" type="button" data-act="prev-song" aria-label="上一首"><span class="mi mi-prev"></span></button>
+        <button class="p-ctrl-btn" type="button" data-act="prev-song" aria-label="上一首"><svg class="icon ctrl-ico"><use href="#i-prev"></use></svg></button>
         <button class="p-play" id="btnPlay" type="button" data-act="toggle-play" aria-label="播放/暂停"><svg class="icon"><use href="#i-play"></use></svg></button>
-        <button class="p-ctrl-btn" type="button" data-act="next-song" aria-label="下一首"><span class="mi mi-next"></span></button>
+        <button class="p-ctrl-btn" type="button" data-act="next-song" aria-label="下一首"><svg class="icon ctrl-ico"><use href="#i-next"></use></svg></button>
         <button class="p-icon-btn" type="button" data-act="open-queue" aria-label="播放队列"><svg class="icon"><use href="#i-queue"></use></svg></button>
       </div>
 

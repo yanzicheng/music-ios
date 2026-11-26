@@ -4269,8 +4269,10 @@
 
   /* ---------------- v3.9 通用点击特效：水波纹 + 播放键脉冲 ----------------
      两个播放器共用同一套：任意圆形/胶囊按钮按下时从触点扩散一圈光，
-     播放键额外抖出一圈脉冲环，用来强化"按到了"的反馈。 */
-  var RIP_SEL = '.p-play,.p-ctrl-btn,.p-icon-btn,.p-act,.swipe-ctrl .sctrl,.sw-act,.mini-btn,.swipe-cover'
+     播放键额外抖出一圈脉冲环，用来强化"按到了"的反馈。
+     v55（真机问题 3）：歌曲行/列表单元格/卡片也纳入水波纹范围 —— 之前只有按钮有反馈，
+     点歌时除了切歌没有任何手感。 */
+  var RIP_SEL = '.p-play,.p-ctrl-btn,.p-icon-btn,.p-act,.swipe-ctrl .sctrl,.sw-act,.mini-btn,.swipe-cover,.song,.cell,.quick,.cat,.hcard'
 
   /* v3.9：只改 <use> 的 href，不重建 innerHTML —— 否则按钮内的水波纹会被冲掉 */
   function setBtnIcon(btn, iconId) {
@@ -4315,6 +4317,40 @@
       setTimeout(function () { el.classList.remove('pulse') }, 560)
     }
   }, true)
+
+  /* ---------------- v55 按压反馈（真机问题 3：点歌没手感） ----------------
+     iOS 的 WKWebView 不实现 navigator.vibrate，Web 层拿不到真实震动马达，
+     所以这里做等效触感：按下瞬间立刻缩放 + 变暗（.is-press），
+     再叠加一层从触点扩散的水波纹。两者都在 pointerdown 阶段同步触发，
+     不等动画帧，手指一落就有反馈。 */
+  var PRESS_SEL = RIP_SEL + ',#tabbar .tab,.sp-tab,.swipe-toggle,.panel-back,.p-ico,.mini-main'
+  var pressEl = null
+  var pressTimer = 0
+
+  function clearPress() {
+    if (pressTimer) { clearTimeout(pressTimer); pressTimer = 0 }
+    if (pressEl) {
+      pressEl.classList.remove('is-press')
+      pressEl = null
+    }
+  }
+
+  document.addEventListener('pointerdown', function (e) {
+    var t = e.target
+    if (!t || !t.closest) return
+    var el = t.closest(PRESS_SEL)
+    if (!el) return
+    clearPress()
+    pressEl = el
+    el.classList.add('is-press')
+    /* 兜底：长按/系统手势吞掉 pointerup 时，400ms 后自动复位，避免一直缩着 */
+    pressTimer = setTimeout(clearPress, 400)
+  }, true)
+
+  document.addEventListener('pointerup', clearPress, true)
+  document.addEventListener('pointercancel', clearPress, true)
+  document.addEventListener('pointerleave', clearPress, true)
+  window.addEventListener('scroll', clearPress, true)
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot)
   else boot()

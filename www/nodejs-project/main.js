@@ -178,13 +178,16 @@ async function bootstrap () {
     port: PORT
   }))
 
-  const deadline = Date.now() + 30000
+  /* v55（真机问题 5）：原来等端口释放最多 30 秒，二次启动时上一个进程的监听还没退，
+     前端就得干等半分钟。真机上端口要释放通常 1 秒内就完成，这里收紧到 5 秒；
+     仍被占用说明旧实例还在正常服务，直接启用新实例会 EADDRINUSE，故不再硬等。 */
+  const deadline = Date.now() + 5000
   let retries = 0
   while (Date.now() < deadline) {
     if (await canBind()) break
     if (retries === 0) report('warn', '端口 ' + PORT + ' 被占用，等待释放')
     retries += 1
-    await sleep(500)
+    await sleep(250)
   }
   const free = await canBind()
   report('info', '端口检查完成 free=' + free + ' retries=' + retries)

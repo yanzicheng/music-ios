@@ -52,11 +52,16 @@
         <icon src="res/icon/ios/icon-180.png" width="180" height="180" />
         <icon src="res/icon/ios/icon-1024.png" width="1024" height="1024" />
 
-        <!-- 启动图（cordova-ios 6+ 默认使用 LaunchScreen.storyboard，这里提供通用尺寸占位） -->
-        <splash src="res/screen/ios/Default@2x~universal~anyany.png" />
-        <splash src="res/screen/ios/Default@1x~universal~anyany.png" />
+        <!-- v55（真机问题 4）：启动图会把自己渲染成一个巨大的 LOGO 铺满首屏，观感很差。
+             这里不再声明任何 splash，LaunchScreen 退化为纯白空屏，启动瞬间直接进首页。 -->
+        <preference name="AutoHideSplashScreen" value="true" />
+        <preference name="SplashScreenDelay" value="0" />
+        <preference name="FadeSplashScreen" value="false" />
+        <preference name="SplashShowOnlyFirstTime" value="false" />
     </platform>
 
     <!-- Info.plist 补齐（ATS / 后台音频 / 文件共享 / 竖屏），幂等执行 -->
     <hook type="after_prepare" src="hooks/ios-plist-patch.js" />
+    <!-- v55：把 AVAudioSession 设成 Playback（忽略静音拨片 + 后台播放），修「看着在放但没声音」 -->
+    <hook type="after_prepare" src="hooks/ios-avsession-patch.js" />
 </widget>

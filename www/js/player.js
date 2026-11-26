@@ -15,6 +15,13 @@
   var audio = new Audio()
   audio.preload = 'auto'
   audio.setAttribute('playsinline', 'playsinline')
+  /* v55（真机问题 1）：WKWebView 里 MediaElementSource 的 CORS 判定非常严格。
+     audio 元素一旦接入 Web Audio 图（AudioFX.attach），若元素的 crossOrigin 不是
+     anonymous、或资源响应不带 Access-Control-Allow-Origin，内核就会把该元素当作
+     “跨域受污染”，按规范向图内输出**静音**——表现为进度条在走、却没有声音，
+     且只在切换过音质/音效（会 reapply/重连音频图）之后才出现。
+     服务端 /api/proxy 与静态服务均返回 Allow-Origin: *，因此这里声明 anonymous 即可。 */
+  audio.crossOrigin = 'anonymous'
 
   var URL_TTL = 8 * 60 * 1000      // 与服务端 getMusicUrl 的 URL_TTL 对齐
   /* v3.19：前端兜底超时跟服务端 DEADLINE(7s) 走。旧值 6s 比服务端 15s 短太多，
@@ -517,6 +524,10 @@
     API.setConfig({ quality: q }).catch(function () {})
     if (!changed) return
     if (S.index < 0 || !audio.src) return
+    /* v55（真机问题 1）：换源会重建解码链，AudioContext 可能已进入 suspended，
+       此时 MediaElementSource 的输出被内核挂起 → 有进度无声音。
+       这里仍在点击手势栈内，直接 resume 一次成本最低、成功率最高。 */
+    if (window.AudioFX) { try { AudioFX.resume() } catch (e) {} }
     var pos = S.currentTime
     var wasPlaying = S.playing
     playAt(S.index).then(function () {
@@ -578,18 +589,45 @@
   }
 
   /* ---------------- 音频事件 ---------------- */
+  /* v55（真机问题 7/8）：iOS 上音频走 /api/proxy 的流式响应时，audio.duration 常常
+     一直是 NaN/Infinity（未拿到 Content-Length 或 Range 响应），进度条就永远显示
+     00:00 且无法拖动。这里用音源自带的 interval（"03:45"）兜底。 */
+  function songDuration(song) {
+    if (!song) return 0
+    var v = song.interval != null ? song.interval : (song.duration != null ? song.duration : song.dt)
+    if (typeof v === 'number') return isFinite(v) && v > 0 ? v : 0
+    var str = String(v == null ? '' : v).trim()
+    if (!str) return 0
+    var m = str.match(/^(\d{1,3}):(\d{1,2})(?::(\d{1,2}))?/)
+    if (m) {
+      return m[3] != null
+        ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3])
+        : Number(m[1]) * 60 + Number(m[2])
+    }
+    var n = Number(str)
+    return isFinite(n) && n > 0 ? n : 0
+  }
+
+  function syncDuration() {
+    var d = audio.duration
+    if (isFinite(d) && d > 0) { S.duration = d; return }
+    var alt = songDuration(S.queue[S.index])
+    S.duration = alt > 0 ? alt : 0
+  }
+
   audio.addEventListener('loadedmetadata', function () {
-    S.duration = isFinite(audio.duration) ? audio.duration : 0
+    syncDuration()
     /* 部分内核换源后会重置 playbackRate，这里按音效配置重新下发 */
     if (window.AudioFX) { try { AudioFX.reapply() } catch (e) {} }
     emit('progress')
   })
   audio.addEventListener('durationchange', function () {
-    S.duration = isFinite(audio.duration) ? audio.duration : 0
+    syncDuration()
     emit('progress')
   })
   audio.addEventListener('timeupdate', function () {
     S.currentTime = audio.currentTime || 0
+    if (!S.duration) syncDuration()
     emit('progress')
     syncLyricIndex()
   })

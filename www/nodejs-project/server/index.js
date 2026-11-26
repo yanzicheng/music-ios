@@ -6,9 +6,15 @@
  * - 所有缓存与下载均落在 D:\学习\音乐 内
  */
 const http = require('node:http')
+const https = require('node:https')
 const fs = require('node:fs')
 const path = require('node:path')
 const { URL } = require('node:url')
+
+/* v55（真机问题 5/6：歌曲加载慢）：每首歌都新建 TLS 连接，真机上握手要 300~800ms，
+   命中代理后首字节更慢。这里给上游音源复用 keep-alive 连接池，第二首起省掉握手。 */
+const HTTP_AGENT = new http.Agent({ keepAlive: true, maxSockets: 6, keepAliveMsecs: 15000 })
+const HTTPS_AGENT = new https.Agent({ keepAlive: true, maxSockets: 6, keepAliveMsecs: 15000, rejectUnauthorized: false })
 
 const { Store } = require('./store')
 const { SourceManager, QUALITY_FALLBACK, PLATFORM_RANK } = require('./sourceManager')
@@ -218,7 +224,7 @@ function serveStatic(req, res, pathname, baseDir) {
  * 音频/图片代理：解决音源地址的 referer 限制与跨域
  * 图片按 px（CSS 像素 x DPR）统一重写为大尺寸原图，避免播放页封面发虚；音频地址不做任何改写。
  */
-function proxyStream(req, res, targetUrl, px) {
+function proxyStream(req, res, targetUrl, px, hop) {
   let u
   try { u = new URL(targetUrl) } catch (_) {
     res.writeHead(400); return res.end('bad url')
@@ -231,6 +237,11 @@ function proxyStream(req, res, targetUrl, px) {
       try { u = new URL(upgraded) } catch (_) {}
     }
   }
+  // v55（真机问题 1/8）：上游 3xx 必须在服务端跟随。
+  // 旧实现直接把 3xx 状态码回给浏览器却没有透传 Location，WebKit 收到一个
+  // "没有跳转地址的 302" 就会解码失败 —— 表现为进度在走但没有声音、时长为 00:00，
+  // 并且这类地址只在部分音源/部分档位出现，正是"切完音质就没声"的直接诱因。
+  const depth = hop || 0
   const lib = u.protocol === 'https:' ? require('node:https') : require('node:http')
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36',
@@ -239,15 +250,39 @@ function proxyStream(req, res, targetUrl, px) {
   }
   if (req.headers.range) headers.Range = req.headers.range
 
-  const upstream = lib.request(u, { method: 'GET', headers, timeout: 30000, rejectUnauthorized: false }, up => {
+  const upstream = lib.request(u, {
+    method: 'GET',
+    headers,
+    timeout: 30000,
+    agent: u.protocol === 'https:' ? HTTPS_AGENT : HTTP_AGENT,
+    rejectUnauthorized: false
+  }, up => {
+    const code = up.statusCode || 200
+    const loc = up.headers.location
+    if (code >= 300 && code < 400 && loc) {
+      try { up.resume() } catch (_) {}
+      if (depth >= 5) {
+        if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('代理跳转过多') }
+        else try { res.end() } catch (_) {}
+        return
+      }
+      let next
+      try { next = new URL(loc, u).href } catch (_) {
+        if (!res.headersSent) { res.writeHead(502, { 'Content-Type': 'text/plain; charset=utf-8' }); res.end('跳转地址非法') }
+        return
+      }
+      try { log('proxy', 'redirect', depth + 1, code, next.slice(0, 120)) } catch (_) {}
+      return proxyStream(req, res, next, px, depth + 1)
+    }
     const outHeaders = {
       'Content-Type': up.headers['content-type'] || 'application/octet-stream',
       'Accept-Ranges': up.headers['accept-ranges'] || 'bytes',
       'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
     }
     if (up.headers['content-length']) outHeaders['Content-Length'] = up.headers['content-length']
     if (up.headers['content-range']) outHeaders['Content-Range'] = up.headers['content-range']
-    res.writeHead(up.statusCode || 200, outHeaders)
+    res.writeHead(code, outHeaders)
     up.pipe(res)
     up.on('error', () => { try { res.end() } catch (_) {} })
   })
@@ -256,7 +291,11 @@ function proxyStream(req, res, targetUrl, px) {
     else try { res.end() } catch (_) {}
   })
   upstream.on('timeout', () => upstream.destroy(new Error('上游超时')))
-  req.on('close', () => { try { upstream.destroy() } catch (_) {} })
+  /* 仅当响应没正常写完（用户切歌/中断）时才掐断上游，正常收尾的 keep-alive 连接留给下一首复用 */
+  req.on('close', () => {
+    if (res.writableEnded) return
+    try { upstream.destroy() } catch (_) {}
+  })
   upstream.end()
 }
 
