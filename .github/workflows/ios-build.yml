@@ -98,10 +98,11 @@ jobs:
           echo "workspace=$WS  project=$PROJ"
           xcodebuild -list -workspace "$WS" > list.log 2>&1 || true
           tail -n 30 list.log
-          # 方案名以 xcodebuild -list 的输出为准，取不到就回退为工程名
-          SCHEME=$(sed -n '/Schemes:/,$p' list.log | grep -v 'Schemes:' | sed 's/^[[:space:]]*//' | grep -v '^$' | head -n 1)
+          # 排除库/依赖 scheme，优先取与工程同名的 app scheme
+          SCHEME=$(sed -n '/Schemes:/,$p' list.log | grep -v 'Schemes:' | grep -v 'Build Configurations:' | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | grep -v '^$' | grep -vxE "Cordova|CordovaLib|Pods-.*" | head -n 1)
           if [ -z "$SCHEME" ]; then SCHEME="$PROJ"; fi
           echo "scheme=$SCHEME"
+          rm -rf platforms/ios/build-dd
           set +e
           xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release -sdk iphoneos \
             -derivedDataPath "$PWD/platforms/ios/build-dd" \
@@ -109,7 +110,7 @@ jobs:
             build > build.log 2>&1
           RC=$?
           if [ $RC -ne 0 ]; then
-            echo "===== BUILD FAILED rc=$RC ====="
+            echo "===== BUILD FAILED rc=$RC scheme=$SCHEME ====="
             echo "--- error lines ---"
             grep -nE "error:|fatal error|The following build commands failed|BUILD FAILED|Failed to|Command .* failed" build.log | head -n 40
             echo "--- tail 60 ---"
@@ -119,9 +120,14 @@ jobs:
             echo "::error title=xcodebuild failed rc=$RC::$ERRS$TAILTXT"
             exit $RC
           fi
-          echo "===== BUILD OK ====="
+          echo "===== BUILD OK scheme=$SCHEME ====="
           tail -n 20 build.log
-          find platforms/ios/build-dd/Build/Products -maxdepth 2 -name "*.app" -type d
+          APPFOUND=$(find platforms/ios/build-dd/Build/Products -name "*.app" -type d 2>/dev/null | head -n 1)
+          if [ -z "$APPFOUND" ]; then
+            echo "::error title=build ok but no .app produced::scheme=$SCHEME%0A$(find platforms/ios/build-dd/Build/Products -maxdepth 3 2>/dev/null | head -n 30 | tr -d '\r' | awk '{printf "%s%%0A", $0}')"
+            exit 1
+          fi
+          echo "APPFOUND=$APPFOUND"
 
       - name: Diagnose build output
         if: always()
