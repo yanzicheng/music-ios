@@ -189,9 +189,53 @@ jobs:
           rm -rf ipa-out
           mkdir -p ipa-out/Payload
           cp -R "$APP" ipa-out/Payload/
-          ( cd ipa-out && zip -qry "../MusicPlayer-unsigned.ipa" Payload )
+          python3 - "ipa-out" "MusicPlayer-unsigned.ipa" <<'PY'
+          import os, sys, zipfile
+
+          root, out = sys.argv[1], sys.argv[2]
+          payload = os.path.join(root, "Payload")
+
+          with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+              for dirpath, dirnames, filenames in os.walk(payload):
+                  dirnames.sort()
+                  filenames.sort()
+                  rel = os.path.relpath(dirpath, root)
+                  if rel != "Payload":
+                      zi = zipfile.ZipInfo(rel + "/")
+                      zi.create_system = 3
+                      zi.external_attr = (0o40755 << 16) | 0x10
+                      zi.compress_type = zipfile.ZIP_STORED
+                      z.writestr(zi, "")
+                  for name in filenames:
+                      full = os.path.join(dirpath, name)
+                      arc = os.path.join(rel, name)
+                      if os.path.islink(full):
+                          zi = zipfile.ZipInfo(arc)
+                          zi.create_system = 3
+                          zi.external_attr = 0o120777 << 16
+                          zi.compress_type = zipfile.ZIP_STORED
+                          z.writestr(zi, os.readlink(full))
+                          continue
+                      st = os.stat(full)
+                      zi = zipfile.ZipInfo(arc, date_time=(2020, 1, 1, 0, 0, 0))
+                      zi.create_system = 3
+                      zi.external_attr = (st.st_mode & 0xFFFF) << 16
+                      zi.compress_type = zipfile.ZIP_DEFLATED
+                      with open(full, "rb") as f:
+                          z.writestr(zi, f.read())
+
+          print("ipa bytes:", os.path.getsize(out))
+          zf = zipfile.ZipFile(out)
+          names = zf.namelist()
+          nonascii = [n for n in names if any(ord(c) > 127 for c in n)]
+          bad = [n for n in nonascii if not (zf.getinfo(n).flag_bits & 0x800)]
+          print("entries:", len(names), "nonascii:", len(nonascii), "utf8flag_missing:", len(bad))
+          for n in nonascii[:12]:
+              print("  nonascii-entry:", n, "utf8=", bool(zf.getinfo(n).flag_bits & 0x800))
+          if bad:
+              raise SystemExit("ipa contains non-ascii entries without UTF-8 flag")
+          PY
           ls -lh MusicPlayer-unsigned.ipa
-          unzip -l MusicPlayer-unsigned.ipa | head -n 20
 
       - name: Upload IPA artifact
         if: success()
