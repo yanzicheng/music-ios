@@ -175,6 +175,29 @@ jobs:
           path: MusicPlayer-unsigned.zip
           retention-days: 14
 
+      - name: Package unsigned .ipa
+        if: success()
+        run: |
+          set -e
+          APP=$(find platforms/ios/build-dd/Build/Products -name "*.app" -type d 2>/dev/null | head -n 1)
+          if [ -z "$APP" ]; then APP=$(find . -name "*.app" -type d -not -path "*/build-dd/*" 2>/dev/null | head -n 1); fi
+          if [ -z "$APP" ]; then echo "::error title=no .app for ipa::"; exit 1; fi
+          echo "APP=$APP"
+          rm -rf ipa-out
+          mkdir -p ipa-out/Payload
+          cp -R "$APP" ipa-out/Payload/
+          ( cd ipa-out && zip -qry "../MusicPlayer-unsigned.ipa" Payload )
+          ls -lh MusicPlayer-unsigned.ipa
+          unzip -l MusicPlayer-unsigned.ipa | head -n 20
+
+      - name: Upload IPA artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: MusicPlayer-ipa
+          path: MusicPlayer-unsigned.ipa
+          if-no-files-found: error
+
       - name: Upload build log
         if: always()
         uses: actions/upload-artifact@v4
