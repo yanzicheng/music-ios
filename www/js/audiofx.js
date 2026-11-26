@@ -1,21 +1,33 @@
 /* ===========================================================
    音效引擎 v2（Web Audio API，对齐 QQ音乐 的音效能力 + 开源音质增强）
    -----------------------------------------------------------
-   信号链（v56 重构）：
-     <audio> → MediaElementSource → preGain
+   信号链（v59 修复刺啦失真）：
+     <audio> → MediaElementSource → preGain（自动 headroom 预衰减）
              → 10 段 EQ(31/62/125/250/500/1k/2k/4k/8k/16k)
              → 分频低音（Linkwitz-Riley 4 阶 @160Hz）
                   ├ low  → lowGain(0~+9dB) ──────────────┐
-                  └ low  → 谐波激励(WaveShaper 软饱和) ──┤
+                  └ low  → 30Hz 高通 → tanh 激励(≤1.8x) ──┤
                     high → ─────────────────────────────┤
                                                         ↓
-                                     空间感（卷积 IR / 经典延迟 / 关闭）
+                                     空间感（IR-RMS 归一 卷积 / 经典延迟 / 关闭）
                                                         ↓
-                              立体声宽度（真 M/S 增益 + 相位一致性约束）
+                              立体声宽度（真 M/S 增益 + mid 补偿 + 相位一致性约束）
                                                         ↓
-                              EBU R128 响度标准化（动态增益 + 峰值保护）
+                              EBU R128 响度标准化（可选动态增益）
                                                         ↓
-                                      安全限幅器 → master(淡入淡出) → 输出
+                    常开三级限幅：4ms 前视 → 压缩(-2.5dB/20:1) → 真峰值软钳(-1dBFS, 4x)
+                                                        ↓
+                                       master(淡入淡出) → 输出
+
+   v59 修的四个失真根因：
+   1) 激励器旧曲线覆盖 [-1,1]，而 drive 最高 4 倍，超域输入被夹成曲线端点平顶
+      → 硬拐角（"刺啦"主因）。现改 tanh(k·x)/tanh(k) 全域连续可导，drive ≤1.8，
+      湿声 ≤0.35，输入端加 30Hz 高通避免直流偏移把曲线推偏；
+   2) 全链无 headroom：EQ(+12dB)/低音(+9dB)/宽侧路同时提升必然超 0dBFS。
+      现按最大提升量算出总 headroom，在 preGain 上整体预衰减；
+   3) 限幅器形同虚设（只有 R128 开着才生效，否则 ratio=1 纯直通、末端无钳位）。
+      现三级常开，-1dBFS 是硬上限；
+   4) 程序化 IR 按峰值归一，卷积湿声局部过载。现按能量(RMS)归一，湿声 ≤0.35。
 
    诊断探针（不参与听感，全部接 0 增益汇点后进 destination 以被图拉动）：
      L/R K 加权 → 瞬时/短时/积分 LUFS；输出 L/R → 采样峰值/削波/电平/频谱；
@@ -35,6 +47,9 @@
 
   /* 预设：eq 为 10 段增益(dB)；bass/width/ambience 为 0~1；comp=响度标准化 */
   var PRESETS = {
+    /* 无损直通：完整旁路，源节点直连输出（零处理、零着色、零延迟），
+       语义等价于"关闭音效"，但作为预设可直接点选，用于 A/B 对照 */
+    lossless:     { name: '无损直通',    eq: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],              bass: 0,    width: 0,    ambience: 0,    comp: false, bypass: true },
     original:     { name: '原声',        eq: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],              bass: 0,    width: 0,    ambience: 0,    comp: false },
     superbass:    { name: '超重低音',    eq: [6, 5, 3, 1, 0, -1, -1, 0, 1, 0],             bass: 0.75, width: 0.15, ambience: 0,    comp: true },
     vocal:        { name: '清澈人声',    eq: [-2, -2, 0, 2, 4, 4, 3, 1, 0, -1],            bass: 0,    width: 0,    ambience: 0,    comp: true },
@@ -60,6 +75,18 @@
   var CROSSOVER = 160      /* 分频点 Hz */
   var MAX_BASS_DB = 9      /* 低音最大提升，避免硬拉导致浑浊 */
   var IR_SECONDS = 1.2     /* 合成 IR 长度 */
+
+  /* ---- v59 音质参数 ---- */
+  var CTX_RATE = 48000     /* 固定 48k 上下文，避免 iOS 从 44.1k 反复重采样抖动 */
+  var EXC_HP = 30          /* 激励器前级高通：切掉直流与次声，避免曲线偏置 */
+  var EXC_MAX_DRIVE = 1.8  /* 激励器最大驱动倍数（旧版 4 倍是刺啦主因） */
+  var EXC_MAX_WET = 0.35   /* 激励湿声上限 */
+  var MAX_IR_WET = 0.35    /* 卷积湿声上限 */
+  var LOOKAHEAD = 0.004    /* 限幅前视 4ms */
+  var LIMIT_THRESHOLD = -2.5
+  var CLIP_KNEE = 0.85     /* 软钳线性区顶 */
+  var CLIP_CEIL = 0.891    /* 软钳上限 = -1dBFS */
+  var HEADROOM_MAX_DB = 10
 
   var cfg = {
     enabled: false,
@@ -109,6 +136,9 @@
     gainDb: 0,
     gainS: 1,
     widthFactor: 1,
+    headroomDb: 0,
+    limReduction: 0,
+    limActive: false,
     bufL: null,
     bufR: null,
     bufOL: null,
@@ -176,16 +206,17 @@
       }
     }
 
-    var peak = 0
+    /* v59：按能量（RMS）归一化，而不是按峰值。
+       令 sqrt(Σ h²) = 1，则卷积对宽带素材的能量增益恰为 0dB，
+       湿声大小完全由 irWet 控制；旧版峰值归一在 1.2s 尾巴上会让湿声局部抬高
+       数倍，叠上 amb*0.55 直接过载（"糊 + 刺"的次要来源）。 */
+    var energy = 0
     for (var c2 = 0; c2 < 2; c2++) {
       var data = buf.getChannelData(c2)
-      for (var j = 0; j < data.length; j++) {
-        var a = data[j] < 0 ? -data[j] : data[j]
-        if (a > peak) peak = a
-      }
+      for (var j = 0; j < data.length; j++) energy += data[j] * data[j]
     }
-    if (peak > 0) {
-      var g = 0.5 / peak
+    if (energy > 1e-12 && isFinite(energy)) {
+      var g = 1 / Math.sqrt(energy)
       for (var c3 = 0; c3 < 2; c3++) {
         var dt = buf.getChannelData(c3)
         for (var n = 0; n < dt.length; n++) dt[n] *= g
@@ -206,14 +237,41 @@
     }
   }
 
-  /* 谐波激励曲线：软饱和（tanh 近似），给小喇叭补低频听感而不硬拉增益 */
-  function makeExciterCurve() {
-    var n = 1024
+  /* 谐波激励曲线：y = tanh(k·x) / tanh(k)
+     —— 全域连续可导，端点严格落在 ±1，输入再大也不会被夹成平顶；
+     旧版 ((1+k)x)/(1+k|x|) 在端点附近导数趋 0 但配合 4 倍 drive 仍会撞到端点，
+     现在驱动上限 1.8，配合前级 30Hz 高通，不再有硬拐角失真。 */
+  function makeExciterCurve(k) {
+    k = k > 0 ? k : 3
+    var n = 2048
     var curve = new Float32Array(n)
-    var k = 2.2
+    var denom = Math.tanh(k)
     for (var i = 0; i < n; i++) {
       var x = (i / (n - 1)) * 2 - 1
-      curve[i] = ((1 + k) * x) / (1 + k * (x < 0 ? -x : x))
+      curve[i] = Math.tanh(k * x) / denom
+    }
+    return curve
+  }
+
+  /* 末端真峰值软钳曲线：
+     |x| ≤ 0.85 → 完全线性（不动细节，不做染色）；
+     0.85 → 0.932 → 用抛物线平滑收口到 0.891（-1dBFS），在 0.85 处斜率同为 1、
+     在 0.932 处斜率降为 0，一阶导连续，因此没有任何硬拐角；
+     |x| > 0.932 → 恒为 0.891，作为整条链的硬上限（配 4x 过采样压掉采样间峰值）。 */
+  function makeClipCurve() {
+    var n = 4096
+    var curve = new Float32Array(n)
+    var d = CLIP_CEIL - CLIP_KNEE
+    var top = CLIP_KNEE + 2 * d
+    var kk = 1 / (4 * d)
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * 2 - 1
+      var a = x < 0 ? -x : x
+      var y
+      if (a <= CLIP_KNEE) y = a
+      else if (a < top) y = CLIP_CEIL - kk * (a - top) * (a - top)
+      else y = CLIP_CEIL
+      curve[i] = x < 0 ? -y : y
     }
     return curve
   }
@@ -224,7 +282,14 @@
     var AC = window.AudioContext || window.webkitAudioContext
     if (!AC) return false
     try {
-      ctx = new AC()
+      /* 固定 48k + playback 延迟策略：iOS 端 <audio> 常见 44.1k 素材，
+         统一在 48k 上下文里重采样，避免播放中被系统按输出设备来回切采样率
+         造成周期性抖动（听感上是轻微的"毛刺"）；老 WebView 不接受参数时回退默认。 */
+      try {
+        ctx = new AC({ sampleRate: CTX_RATE, latencyHint: 'playback' })
+      } catch (e1) {
+        ctx = new AC()
+      }
       nodes = {}
 
       /* 0 增益汇点：让所有"只为测量"的支路被音频图拉动，又不产生声音 */
@@ -268,11 +333,17 @@
       nodes.lowGain = ctx.createGain()
       nodes.lowGain.gain.value = 1
 
-      /* 谐波激励：低音支路并联一路软饱和，产生二次/三次谐波补偿低频感知 */
+      /* 谐波激励：低音支路并联一路软饱和，产生二次/三次谐波补偿低频感知
+         v59：输入端串 30Hz 高通（去直流/次声，避免把 tanh 曲线推偏），
+         drive 上限 1.8，湿声上限 0.35 */
+      nodes.excHP = ctx.createBiquadFilter()
+      nodes.excHP.type = 'highpass'
+      nodes.excHP.frequency.value = EXC_HP
+      nodes.excHP.Q.value = 0.7071
       nodes.excDrive = ctx.createGain()
       nodes.excDrive.gain.value = 1
       nodes.shaper = ctx.createWaveShaper()
-      nodes.shaper.curve = makeExciterCurve()
+      nodes.shaper.curve = makeExciterCurve(3)
       nodes.shaper.oversample = '4x'
       nodes.excWet = ctx.createGain()
       nodes.excWet.gain.value = 0
@@ -317,15 +388,29 @@
       nodes.gS = ctx.createGain(); nodes.gS.gain.value = 1
       nodes.gSn = ctx.createGain(); nodes.gSn.gain.value = -1
 
-      /* ---- EBU R128 响度标准化增益 + 安全限幅器 ---- */
+      /* ---- EBU R128 响度标准化增益 + 常开三级限幅 ----
+         ① laDelay：4ms 前视，让后级的衰减在峰值到达之前就位（lookahead 思路，
+            参考 @synthlet/lookahead-limiter 的前视砖墙结构，但零依赖自实现）；
+         ② comp：-2.5dB / 20:1 / knee 0 / attack 1ms / release 150ms，慢速压住持续大信号，
+            不做 makeup 增益，因此它是"只降不升"；
+         ③ clip：真峰值软钳，|x|≤0.85 线性，平滑收口到 0.891(-1dBFS)，4x 过采样，
+            作为整条链的硬上限（旧版这里什么也没有，削波直接送到扬声器）。 */
       nodes.loud = ctx.createGain()
       nodes.loud.gain.value = 1
-      nodes.limiter = ctx.createDynamicsCompressor()
-      nodes.limiter.threshold.value = 0
-      nodes.limiter.knee.value = 0
-      nodes.limiter.ratio.value = 1
-      nodes.limiter.attack.value = 0.002
-      nodes.limiter.release.value = 0.12
+
+      nodes.laDelay = ctx.createDelay(0.05)
+      nodes.laDelay.delayTime.value = LOOKAHEAD
+
+      nodes.comp = ctx.createDynamicsCompressor()
+      nodes.comp.threshold.value = LIMIT_THRESHOLD
+      nodes.comp.knee.value = 0
+      nodes.comp.ratio.value = 20
+      nodes.comp.attack.value = 0.001
+      nodes.comp.release.value = 0.15
+
+      nodes.clip = ctx.createWaveShaper()
+      nodes.clip.curve = makeClipCurve()
+      nodes.clip.oversample = '4x'
 
       nodes.master = ctx.createGain()
       nodes.master.gain.value = 1
@@ -343,8 +428,9 @@
       nodes.lp1.connect(nodes.lp2)
       nodes.lp2.connect(nodes.lowGain)
       nodes.lowGain.connect(nodes.bandSum)
-      /* 谐波激励支路 */
-      nodes.lp2.connect(nodes.excDrive)
+      /* 谐波激励支路（先 30Hz 高通，再进 tanh 曲线） */
+      nodes.lp2.connect(nodes.excHP)
+      nodes.excHP.connect(nodes.excDrive)
       nodes.excDrive.connect(nodes.shaper)
       nodes.shaper.connect(nodes.excWet)
       nodes.excWet.connect(nodes.bandSum)
@@ -385,10 +471,12 @@
       nodes.side.connect(nodes.gSn)
       nodes.gSn.connect(nodes.wMerge, 0, 1)
 
-      /* 响度 → 限幅 → 淡入淡出 → 输出 */
+      /* 响度 → 前视 → 压缩 → 真峰值软钳 → 淡入淡出 → 输出 */
       nodes.wMerge.connect(nodes.loud)
-      nodes.loud.connect(nodes.limiter)
-      nodes.limiter.connect(nodes.master)
+      nodes.loud.connect(nodes.laDelay)
+      nodes.laDelay.connect(nodes.comp)
+      nodes.comp.connect(nodes.clip)
+      nodes.clip.connect(nodes.master)
       nodes.master.connect(ctx.destination)
 
       /* ---------------- 测量探针 ---------------- */
@@ -556,15 +644,48 @@
     return Math.pow(c, 0.6)
   }
 
+  /* 当前是否"真的在处理"：开关打开 且 没选中无损直通（旁路）预设 */
+  function activeOn() {
+    var p = PRESETS[cfg.preset]
+    return !!cfg.enabled && !(p && p.bypass)
+  }
+
+  /* 宽度矩阵的侧路增益（含相位一致性约束：反相内容不展宽） */
+  function sideGain(w) {
+    return 1 + clamp(w, 0, 1) * 1.6 * Math.pow(clamp(meter.corr, 0, 1), 0.6)
+  }
+
+  /* 自动 headroom：按"最大单段正增益"（EQ 峰与低音架取较大者）+ 激励湿声，
+     在 preGain 上整体预衰减。
+     为什么不用各段求和：各段中心频率不同，几乎不会同相叠加，逐段求和会把音量
+     压死（实测 sum 口径可达 22dB，用户会以为没声音）；这里取主导项 + 激励项，
+     剩余偶发叠加交给常开的末端限幅器兜底，既有余量又不牺牲响度。
+     宽度不参与：mid 补偿已保证展宽时总峰值不上升。 */
+  function headroomDb() {
+    if (!activeOn()) return 0
+    var maxEq = 0
+    for (var i = 0; i < 10; i++) {
+      var v = Number(cfg.eq[i]) || 0
+      if (v > maxEq) maxEq = v
+    }
+    var bassDb = clamp(cfg.bass, 0, 1) * MAX_BASS_DB
+    var ex = clamp(cfg.exciter, 0, 1)
+    var excDb = ex > 0 ? gainToDb(1 + ex * EXC_MAX_WET) : 0
+    var dom = maxEq > bassDb ? maxEq : bassDb
+    return clamp(dom + excDb, 0, HEADROOM_MAX_DB)
+  }
+
   function applyWidth(t) {
     if (!nodes) return
-    var w = cfg.enabled ? clamp(cfg.width, 0, 1) : 0
+    var w = activeOn() ? clamp(cfg.width, 0, 1) : 0
     var factor = widthFactor()
-    var gS = 1 + w * 1.6 * factor
-    var norm = 1 / (1 + 0.35 * w)          /* 展宽后整体电平均有上升，做静态补偿 */
+    var gS = sideGain(w)
+    /* mid 补偿：侧路放大的同时压低中间声道，使 M/S 重建后的峰值不随 width 上升
+       （旧版只有 1/(1+0.35w) 的弱补偿，width=1 时 L/R 峰值仍会超出 1.0） */
+    var gM = 1 / (1 + 0.55 * w * factor)
     nodes.gS.gain.setTargetAtTime(gS, t, 0.06)
     nodes.gSn.gain.setTargetAtTime(-gS, t, 0.06)
-    nodes.gM.gain.setTargetAtTime(norm, t, 0.06)
+    nodes.gM.gain.setTargetAtTime(gM, t, 0.06)
     meter.gainS = gS
     meter.widthFactor = factor
   }
@@ -617,18 +738,26 @@
         for (var i = 0; i < meter.bufOL.length; i++) {
           var a = meter.bufOL[i] < 0 ? -meter.bufOL[i] : meter.bufOL[i]
           if (a > peak) peak = a
-          if (a >= 0.999) clip++
+          /* v59：末端软钳的顶就是 -1dBFS(0.891)，触到顶即计一次"已限幅"，而非等 0.999 硬削 */
+          if (a >= CLIP_CEIL * 0.998) clip++
         }
         for (var j = 0; j < meter.bufOR.length; j++) {
           var b = meter.bufOR[j] < 0 ? -meter.bufOR[j] : meter.bufOR[j]
           if (b > peak) peak = b
-          if (b >= 0.999) clip++
+          if (b >= CLIP_CEIL * 0.998) clip++
         }
         meter.peak = peak
         meter.peakHold = Math.max(peak, meter.peakHold * 0.9)
         meter.clip += clip
         meter.rmsL = Math.sqrt(meanSq(meter.bufOL))
         meter.rmsR = Math.sqrt(meanSq(meter.bufOR))
+      }
+
+      /* 限幅器状态：压缩器 reduction 为负值表示正在压，接近 0 表示透明直通 */
+      if (nodes.comp && typeof nodes.comp.reduction === 'number') {
+        var red = nodes.comp.reduction
+        meter.limReduction = red
+        meter.limActive = red < -0.2
       }
 
       /* 声道相关度 = (Em - Es) / (Em + Es) */
@@ -677,6 +806,8 @@
     meter.gainDb = 0
     meter.gainS = 1
     meter.widthFactor = 1
+    meter.limReduction = 0
+    meter.limActive = false
     if (nodes && nodes.loud && ctx) nodes.loud.gain.setTargetAtTime(1, ctx.currentTime, 0.05)
   }
 
@@ -700,7 +831,9 @@
     applying = true
     try {
       var t = ctx.currentTime
-      var on = !!cfg.enabled
+      var pset = PRESETS[cfg.preset] || null
+      var bypassPreset = !!(pset && pset.bypass)
+      var on = !!cfg.enabled && !bypassPreset
       setRoute(!on)
 
       var eq = on ? cfg.eq : [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -708,41 +841,44 @@
         nodes.eq[i].gain.setTargetAtTime(clamp(eq[i] || 0, -12, 12), t, 0.02)
       }
 
-      /* 分频低音 + 谐波激励 */
+      /* 自动 headroom：整链预衰减，保证 EQ/低音/激励/展宽叠加后不超 0dBFS */
+      var hr = on ? headroomDb() : 0
+      meter.headroomDb = hr
+      nodes.pre.gain.setTargetAtTime(dbToGain(-hr), t, 0.05)
+
+      /* 分频低音 + 谐波激励（tanh 曲线 + 30Hz 高通，drive ≤1.8，湿声 ≤0.35） */
       var bassDb = on ? clamp(cfg.bass, 0, 1) * MAX_BASS_DB : 0
       nodes.lowGain.gain.setTargetAtTime(dbToGain(bassDb), t, 0.03)
       var ex = on ? clamp(cfg.exciter, 0, 1) : 0
-      nodes.excDrive.gain.setTargetAtTime(1 + ex * 3, t, 0.03)
-      nodes.excWet.gain.setTargetAtTime(ex * 0.5, t, 0.03)
+      nodes.excDrive.gain.setTargetAtTime(1 + ex * (EXC_MAX_DRIVE - 1), t, 0.03)
+      nodes.excWet.gain.setTargetAtTime(ex * EXC_MAX_WET, t, 0.03)
 
       /* 空间感 */
-      var preset = PRESETS[cfg.preset] || PRESETS.original
+      var preset = pset || PRESETS.original
       var amb = on ? clamp(preset.ambience || 0, 0, 1) : 0
       var mode = on ? (cfg.ambienceMode || 'ir') : 'off'
       if (mode === 'ir' && amb > 0) ensureIR()
       var irOk = mode === 'ir' && !!nodes.conv && !!nodes.conv.buffer && !!nodes.irWet
       var legacy = mode === 'legacy'
-      if (nodes.irWet) nodes.irWet.gain.setTargetAtTime(irOk ? amb * 0.55 : 0, t, 0.06)
+      if (nodes.irWet) nodes.irWet.gain.setTargetAtTime(irOk ? amb * MAX_IR_WET : 0, t, 0.06)
       nodes.wet.gain.setTargetAtTime(legacy ? amb * 0.45 : 0, t, 0.06)
       nodes.fb.gain.setTargetAtTime(legacy ? amb * 0.2 : 0, t, 0.06)
       nodes.ambDry.gain.setTargetAtTime(1, t, 0.03)
 
-      /* 宽度矩阵 */
+      /* 宽度矩阵（含 mid 补偿） */
       applyWidth(t)
 
-      /* 响度标准化：开时启用安全限幅；关时增益归 1、限幅器透明 */
-      if (on && cfg.r128) {
-        nodes.limiter.threshold.setTargetAtTime(-1.5, t, 0.05)
-        nodes.limiter.knee.setTargetAtTime(0, t, 0.05)
-        nodes.limiter.ratio.setTargetAtTime(20, t, 0.05)
-        nodes.limiter.attack.setTargetAtTime(0.002, t, 0.05)
-        nodes.limiter.release.setTargetAtTime(0.12, t, 0.05)
-      } else {
+      /* 限幅器常开：与 R128 无关，参数固定，末端 -1dBFS 是硬上限 */
+      nodes.comp.threshold.setTargetAtTime(LIMIT_THRESHOLD, t, 0.05)
+      nodes.comp.knee.setTargetAtTime(0, t, 0.05)
+      nodes.comp.ratio.setTargetAtTime(20, t, 0.05)
+      nodes.comp.attack.setTargetAtTime(0.001, t, 0.05)
+      nodes.comp.release.setTargetAtTime(0.15, t, 0.05)
+
+      /* 响度标准化：只在开启时调 loud 增益，且仍受前端 headroom 与末端软钳约束 */
+      if (!(on && cfg.r128)) {
         meter.gainDb = 0
         setLoudGain(1, t)
-        nodes.limiter.threshold.setTargetAtTime(0, t, 0.05)
-        nodes.limiter.knee.setTargetAtTime(0, t, 0.05)
-        nodes.limiter.ratio.setTargetAtTime(1, t, 0.05)
       }
 
       if (audioEl) {
@@ -829,7 +965,9 @@
       cfg.width = clamp(p.width || 0, 0, 1)
       cfg.r128 = p.comp === undefined ? cfg.r128 : !!p.comp
       cfg.smartVolume = !!cfg.r128
-      if (!cfg.enabled) cfg.enabled = true
+      /* 无损直通预设 = 零处理旁路：把开关语义一并置为关闭，保证 src 直连输出 */
+      if (p.bypass) cfg.enabled = false
+      else if (!cfg.enabled) cfg.enabled = true
       build()
       resume()
       apply()
@@ -902,6 +1040,12 @@
         return cfg.eq.every(function (v) { return v === 0 }) && cfg.bass === 0 && cfg.width === 0 && cfg.exciter === 0
       }
       return cfg.preset === 'original' && cfg.bass === 0 && cfg.width === 0 && cfg.exciter === 0
+    },
+
+    /** 是否处于"零处理"状态（关闭音效或选中无损直通预设） */
+    isLossless: function () {
+      var p = PRESETS[cfg.preset]
+      return !cfg.enabled || !!(p && p.bypass)
     },
 
     /** 保存当前 EQ/低音/宽度/激励为自定义预设 */
@@ -1022,8 +1166,19 @@
           db: gainToDb(meter.peak),
           holdDb: gainToDb(meter.peakHold),
           clip: meter.clip,
-          clipping: meter.peak >= 0.999,
+          clipping: meter.peak >= CLIP_CEIL * 0.998,
         },
+        /* 限幅器诊断：常开，-1dBFS 硬上限；triggerDb 为压缩器开始压的阈值，
+           reductionDb 为当前实际衰减量（0 表示透明），active 表示此刻正在限幅 */
+        limit: {
+          on: true,
+          ceilingDb: gainToDb(CLIP_CEIL),
+          thresholdDb: LIMIT_THRESHOLD,
+          reductionDb: meter.limReduction,
+          active: !!meter.limActive,
+          lookaheadMs: LOOKAHEAD * 1000,
+        },
+        headroomDb: meter.headroomDb,
         level: {
           l: gainToDb(meter.rmsL),
           r: gainToDb(meter.rmsR),

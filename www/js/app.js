@@ -3295,6 +3295,8 @@
       dgSet('#dgState', '未播放')
       ;['#dgM', '#dgS', '#dgI', '#dgPeak'].forEach(function (s) { dgSet(s, '--') })
       dgSet('#dgClip', '削波 0 次')
+      dgSet('#dgLimit', '限幅 --')
+      dgSet('#dgHeadroom', '余量 --')
       dgSet('#dgCorr', '相关度 --')
       dgSet('#dgGain', '补偿 --')
       dgBar('#dgBarL', -Infinity)
@@ -3308,6 +3310,8 @@
       dgSet('#dgState', d && d.ctx && d.ctx !== 'none' ? ('音频上下文 ' + d.ctx) : '未开启音效')
       ;['#dgM', '#dgS', '#dgI', '#dgPeak'].forEach(function (s) { dgSet(s, '--') })
       dgSet('#dgClip', '削波 0 次')
+      dgSet('#dgLimit', '限幅 --')
+      dgSet('#dgHeadroom', '余量 --')
       dgSet('#dgCorr', '相关度 --')
       dgSet('#dgGain', '补偿 --')
       dgBar('#dgBarL', -Infinity)
@@ -3335,6 +3339,15 @@
     var pk = d.peak || {}
     dgSet('#dgPeak', isFinite(pk.db) ? pk.db.toFixed(1) + ' dBFS' : '--')
     dgSet('#dgClip', '削波 ' + (pk.clip || 0) + ' 次')
+
+    /* 限幅器读数：触发阈值 + 当前衰减量（0 表示透明直通，<0 表示正在限幅） */
+    var lm = d.limit || {}
+    var red = lm.reductionDb
+    dgSet('#dgLimit', isFinite(red)
+      ? ('限幅 ' + (lm.active ? ('−' + Math.abs(red).toFixed(1) + 'dB') : '空闲') + ' / 顶 ' + (isFinite(lm.ceilingDb) ? lm.ceilingDb.toFixed(1) : '-1.0') + 'dB')
+      : '限幅 --')
+    var hrDb = d.headroomDb
+    dgSet('#dgHeadroom', isFinite(hrDb) && hrDb > 0 ? ('余量 −' + hrDb.toFixed(1) + 'dB') : '余量 0.0dB')
 
     var corr = d.corr
     dgSet('#dgCorr', isFinite(corr) ? '相关度 ' + corr.toFixed(2) + (corr < 0 ? ' (反相)' : '') : '相关度 --')
