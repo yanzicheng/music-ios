@@ -172,7 +172,6 @@ html, body { -webkit-tap-highlight-color: transparent; }
   width: 23px !important;
   height: 23px !important;
   color: inherit !important;
-  fill: currentColor !important;
   display: block;
 }
 
