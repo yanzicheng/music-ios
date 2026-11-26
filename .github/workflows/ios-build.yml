@@ -92,30 +92,45 @@ jobs:
       - name: Build (release, device, unsigned)
         run: |
           set -o pipefail
-          BUILD_FLAGS=(--buildFlag="CODE_SIGNING_ALLOWED=NO" --buildFlag="CODE_SIGNING_REQUIRED=NO" --buildFlag="CODE_SIGN_IDENTITY=")
+          WS=$(ls -d platforms/ios/*.xcworkspace 2>/dev/null | head -n 1)
+          if [ -z "$WS" ]; then echo "未找到 xcworkspace"; ls -la platforms/ios; exit 1; fi
+          PROJ=$(basename "$WS" .xcworkspace)
+          echo "workspace=$WS  project=$PROJ"
+          xcodebuild -list -workspace "$WS" > list.log 2>&1 || true
+          tail -n 30 list.log
+          # 方案名以 xcodebuild -list 的输出为准，取不到就回退为工程名
+          SCHEME=$(sed -n '/Schemes:/,$p' list.log | grep -v 'Schemes:' | sed 's/^[[:space:]]*//' | grep -v '^$' | head -n 1)
+          if [ -z "$SCHEME" ]; then SCHEME="$PROJ"; fi
+          echo "scheme=$SCHEME"
           set +e
-          npx cordova build ios --release --device "${BUILD_FLAGS[@]}" > build.log 2>&1
+          xcodebuild -workspace "$WS" -scheme "$SCHEME" -configuration Release -sdk iphoneos \
+            -derivedDataPath "$PWD/platforms/ios/build-dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" CODE_SIGN_ENTITLEMENTS="" DEVELOPMENT_TEAM="" \
+            build > build.log 2>&1
           RC=$?
           if [ $RC -ne 0 ]; then
             echo "===== BUILD FAILED rc=$RC ====="
             echo "--- error lines ---"
-            grep -nE "error:|error |fatal error|The following build commands failed|BUILD FAILED|Failed to|Command CompileSwift failed" build.log | head -n 40
+            grep -nE "error:|fatal error|The following build commands failed|BUILD FAILED|Failed to|Command .* failed" build.log | head -n 40
             echo "--- tail 60 ---"
             tail -n 60 build.log
             ERRS=$(grep -E "error:|fatal error|The following build commands failed|BUILD FAILED|Failed to build|Command .* failed" build.log | head -n 25 | tr -d '\r' | cut -c1-300 | awk '{printf "%s%%0A", $0}')
             TAILTXT=$(tail -n 15 build.log | tr -d '\r' | cut -c1-300 | awk '{printf "%s%%0A", $0}')
-            echo "::error title=cordova build ios failed rc=$RC::$ERRS$TAILTXT"
+            echo "::error title=xcodebuild failed rc=$RC::$ERRS$TAILTXT"
             exit $RC
           fi
           echo "===== BUILD OK ====="
           tail -n 20 build.log
+          find platforms/ios/build-dd/Build/Products -maxdepth 2 -name "*.app" -type d
 
       - name: Package unsigned .app
         run: |
           set -e
-          APP=$(find platforms/ios/build -name "*.app" -type d | head -n 1)
-          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios/build -name "*.app" -type d; exit 1; fi
+          APP=$(find platforms/ios/build-dd/Build/Products -name "*.app" -type d 2>/dev/null | head -n 1)
+          if [ -z "$APP" ]; then APP=$(find platforms/ios/build -name "*.app" -type d 2>/dev/null | head -n 1); fi
+          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios -name "*.app" -type d | head -n 20; exit 1; fi
           echo "APP=$APP"
+          du -sh "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" MusicPlayer-unsigned.zip
           ls -lh MusicPlayer-unsigned.zip
 
@@ -131,7 +146,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build.log
+          path: |
+            build.log
+            list.log
           retention-days: 7
           if-no-files-found: ignore
 
