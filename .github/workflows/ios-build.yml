@@ -123,12 +123,40 @@ jobs:
           tail -n 20 build.log
           find platforms/ios/build-dd/Build/Products -maxdepth 2 -name "*.app" -type d
 
+      - name: Diagnose build output
+        if: always()
+        run: |
+          set +e
+          echo "=== build.log size ==="
+          wc -c build.log 2>/dev/null || echo "no build.log"
+          echo "=== Products 目录 ==="
+          ls -la platforms/ios/build-dd/Build/Products 2>/dev/null || echo "no build-dd Products"
+          echo "=== build-dd 顶层 ==="
+          ls -la platforms/ios/build-dd 2>/dev/null || echo "no build-dd"
+          echo "=== 全仓库 .app ==="
+          find . -name "*.app" -type d 2>/dev/null | head -n 60
+          echo "=== xcarchive ==="
+          find . -name "*.xcarchive" -type d 2>/dev/null | head -n 10
+          TREE=$(find platforms/ios/build-dd/Build/Products -maxdepth 3 2>/dev/null | head -n 40 | tr -d '\r' | awk '{printf "%s%%0A",$0}')
+          HITS=$(find . -name "*.app" -type d 2>/dev/null | head -n 20 | tr -d '\r' | awk '{printf "%s%%0A",$0}')
+          LOGTAIL=$(tail -n 80 build.log 2>/dev/null | tr -d '\r' | cut -c1-400 | awk '{printf "%s%%0A",$0}')
+          LISTTAIL=$(tail -n 25 list.log 2>/dev/null | tr -d '\r' | cut -c1-400 | awk '{printf "%s%%0A",$0}')
+          echo "::warning title=products tree::$TREE"
+          echo "::warning title=app hits::$HITS"
+          echo "::warning title=list.log tail::$LISTTAIL"
+          echo "::error title=build.log tail80::$LOGTAIL"
+
       - name: Package unsigned .app
         run: |
           set -e
-          APP=$(find platforms/ios/build-dd/Build/Products -name "*.app" -type d 2>/dev/null | head -n 1)
-          if [ -z "$APP" ]; then APP=$(find platforms/ios/build -name "*.app" -type d 2>/dev/null | head -n 1); fi
-          if [ -z "$APP" ]; then echo "未找到 .app 产物"; find platforms/ios -name "*.app" -type d | head -n 20; exit 1; fi
+          APP=$(find . -name "*.app" -type d 2>/dev/null | grep -v "/Pods/" | head -n 1)
+          if [ -z "$APP" ]; then
+            echo "未找到 .app 产物"
+            find . -name "*.app" -type d | head -n 40
+            MSG=$(find platforms/ios/build-dd -maxdepth 4 2>/dev/null | head -n 30 | tr -d '\r' | awk '{printf "%s%%0A",$0}')
+            echo "::error title=no .app found::$MSG"
+            exit 1
+          fi
           echo "APP=$APP"
           du -sh "$APP"
           ditto -c -k --sequesterRsrc --keepParent "$APP" MusicPlayer-unsigned.zip
@@ -149,6 +177,7 @@ jobs:
           path: |
             build.log
             list.log
+            uploads.txt
           retention-days: 7
           if-no-files-found: ignore
 
