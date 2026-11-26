@@ -36,6 +36,7 @@
 <link rel="stylesheet" href="css/v57.css">
 <link rel="stylesheet" href="css/v58.css">
 <link rel="stylesheet" href="css/v60.css">
+<link rel="stylesheet" href="css/v61.css">
 </head>
 <body>
 
@@ -211,6 +212,21 @@
   </header>
   <div class="dl-sum" id="dlSum">正在读取…</div>
   <div class="panel-body" id="dlBody"></div>
+</section>
+
+<section id="localPanel" aria-hidden="true">
+  <header class="panel-head">
+    <button class="panel-back" type="button" data-act="local-close" aria-label="返回"><svg class="icon"><use href="#i-back"></use></svg></button>
+    <div class="panel-title">本地音乐</div>
+    <button class="panel-back" type="button" data-act="local-refresh" aria-label="重新扫描"><svg class="icon"><use href="#i-refresh"></use></svg></button>
+  </header>
+  <div class="local-search">
+    <svg class="icon"><use href="#i-search"></use></svg>
+    <input id="localFilter" type="search" placeholder="筛选曲目或文件夹" autocomplete="off" enterkeyhint="search">
+    <button class="local-clear" id="localClear" type="button" data-act="local-clear" aria-label="清空" hidden><svg class="icon"><use href="#i-close"></use></svg></button>
+  </div>
+  <div class="dl-sum" id="localSum">正在扫描…</div>
+  <div class="panel-body" id="localBody"></div>
 </section>
 
 <section id="player" aria-hidden="true">

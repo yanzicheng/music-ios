@@ -66,6 +66,84 @@ for (const d of [CACHE_DIR, LOG_DIR, DOWNLOAD_DIR, path.join(CACHE_DIR, '封面'
   }
 }
 
+/* v61 本地音乐库：递归扫描下载目录 + 扩展名白名单补齐 ape / wv / dsf / dff
+   iOS「文件」App 拷入的往往是一整层文件夹（歌手/专辑），只 readdir 一层会漏掉子目录曲目。 */
+const LOCAL_AUDIO_EXT = ['mp3', 'flac', 'ogg', 'opus', 'm4a', 'aac', 'wav', 'aif', 'aiff', 'ape', 'wv', 'dsf', 'dff']
+const LOCAL_AUDIO_MIME = {
+  mp3: 'audio/mpeg', flac: 'audio/flac', ogg: 'audio/ogg', opus: 'audio/ogg',
+  m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', aif: 'audio/aiff', aiff: 'audio/aiff',
+  ape: 'audio/x-ape', wv: 'audio/x-wavpack', dsf: 'audio/x-dsf', dff: 'audio/x-dff',
+}
+const LOCAL_SCAN_MAX_DEPTH = 8
+const LOCAL_SCAN_MAX_FILES = 5000
+
+/* 把「相对下载目录的 posix 路径」安全解析成绝对路径；空、含 ..、越界一律返回 null */
+function localSafePath(root, rel) {
+  const raw = String(rel || '').replace(/\\/g, '/').replace(/^\/+/, '')
+  if (!raw) return null
+  const parts = raw.split('/').filter(function (s) { return s && s !== '.' })
+  if (!parts.length) return null
+  for (let i = 0; i < parts.length; i++) if (parts[i] === '..') return null
+  const rootAbs = path.resolve(root)
+  const abs = path.resolve(rootAbs, parts.join(path.sep))
+  const rootSep = rootAbs.endsWith(path.sep) ? rootAbs : rootAbs + path.sep
+  if (abs !== rootAbs && abs.indexOf(rootSep) !== 0) return null
+  return abs
+}
+
+/* 递归收集音频文件（最大深度 8 层 / 最多 5000 首，防止软链成环与超大目录拖死请求） */
+function localScanAudio(root) {
+  const out = []
+  const seen = Object.create(null)
+  const rootAbs = path.resolve(root)
+  const rootSep = rootAbs.endsWith(path.sep) ? rootAbs : rootAbs + path.sep
+  let truncated = false
+
+  function walk(abs, rel, depth) {
+    if (out.length >= LOCAL_SCAN_MAX_FILES) { truncated = true; return }
+    let names = []
+    try { names = fs.readdirSync(abs) } catch (_) { return }
+    names.sort(function (a, b) { return a < b ? -1 : a > b ? 1 : 0 })
+    for (let i = 0; i < names.length; i++) {
+      if (out.length >= LOCAL_SCAN_MAX_FILES) { truncated = true; return }
+      const nm = names[i]
+      if (!nm || nm.charAt(0) === '.') continue
+      const childAbs = path.join(abs, nm)
+      const childRel = rel ? rel + '/' + nm : nm
+      let st = null
+      try { st = fs.lstatSync(childAbs) } catch (_) { continue }
+      if (st.isSymbolicLink()) {
+        /* 软链只跟随指向下载目录内部的，避免跳出授权范围或成环 */
+        let real = ''
+        try { real = fs.realpathSync(childAbs) } catch (_) { continue }
+        if (real.indexOf(rootSep) !== 0) continue
+        try { st = fs.statSync(childAbs) } catch (_) { continue }
+      }
+      if (st.isDirectory()) {
+        if (depth < LOCAL_SCAN_MAX_DEPTH) walk(childAbs, childRel, depth + 1)
+        continue
+      }
+      if (!st.isFile()) continue
+      const ext = path.extname(nm).replace('.', '').toLowerCase()
+      if (LOCAL_AUDIO_EXT.indexOf(ext) < 0) continue
+      if (seen[childRel]) continue
+      seen[childRel] = 1
+      out.push({
+        name: childRel,
+        title: nm.replace(/\.[^.]+$/, ''),
+        ext: ext,
+        dir: rel || '',
+        size: st.size,
+        mtime: st.mtimeMs,
+        abs: childAbs,
+      })
+    }
+  }
+
+  walk(rootAbs, '', 0)
+  return { list: out, truncated: truncated }
+}
+
 const PORT = Number(process.env.LX_PORT || 34200)
 const HOST = process.env.LX_HOST || '127.0.0.1'
 
@@ -910,46 +988,38 @@ async function handleApi(req, res, url) {
   if (p === '/download/list') {
     const dir = store.getConfig().downloadDir || DOWNLOAD_DIR
     let list = []
+    let truncated = false
     try {
-      if (fs.existsSync(dir)) {
-        list = fs.readdirSync(dir)
-          .filter(n => /\.(mp3|flac|ogg|opus|m4a|aac|wav)$/i.test(n))
-          .map(n => {
-            const fp = path.join(dir, n)
-            let st = null
-            try { st = fs.statSync(fp) } catch (_) { return null }
-            if (!st || !st.isFile()) return null
-            return {
-              name: n,
-              size: st.size,
-              mtime: st.mtimeMs,
-              url: '/api/download/file?name=' + encodeURIComponent(n),
-            }
-          })
-          .filter(Boolean)
-          .sort((a, b) => b.mtime - a.mtime)
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) {
+        /* v61：递归扫描，name 为相对下载目录的 posix 路径（根目录文件仍是纯文件名，向后兼容） */
+        const scan = localScanAudio(dir)
+        truncated = scan.truncated
+        list = scan.list.map(it => ({
+          name: it.name,
+          title: it.title,
+          ext: it.ext,
+          dir: it.dir,
+          size: it.size,
+          mtime: it.mtime,
+          url: '/api/download/file?name=' + encodeURIComponent(it.name),
+        })).sort((a, b) => b.mtime - a.mtime)
       }
     } catch (e) {
       return sendErr(res, e, 500)
     }
     const total = list.reduce((s, x) => s + x.size, 0)
-    return sendJson(res, { ok: true, dir, list, total })
+    return sendJson(res, { ok: true, dir, list, total, count: list.length, truncated })
   }
 
   if (p === '/download/file') {
     const dir = store.getConfig().downloadDir || DOWNLOAD_DIR
-    const name = path.basename(String(url.searchParams.get('name') || ''))
-    const fp = path.join(dir, name)
-    if (!name || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) {
+    const fp = localSafePath(dir, url.searchParams.get('name'))
+    if (!fp || !fs.existsSync(fp) || !fs.statSync(fp).isFile()) {
       return sendErr(res, new Error('文件不存在'), 404)
     }
     const size = fs.statSync(fp).size
-    const ext = path.extname(fp).toLowerCase()
-    const mime = ext === '.flac' ? 'audio/flac'
-      : ext === '.m4a' ? 'audio/mp4'
-        : ext === '.ogg' || ext === '.opus' ? 'audio/ogg'
-          : ext === '.wav' ? 'audio/wav'
-            : ext === '.aac' ? 'audio/aac' : 'audio/mpeg'
+    const ext = path.extname(fp).replace('.', '').toLowerCase()
+    const mime = LOCAL_AUDIO_MIME[ext] || 'application/octet-stream'
     const range = req.headers.range
     if (range) {
       const m = /bytes=(\d*)-(\d*)/.exec(range) || []
@@ -981,9 +1051,9 @@ async function handleApi(req, res, url) {
     if (req.method !== 'POST') return sendErr(res, new Error('方法不允许'), 405)
     const body = await readBody(req)
     const dir = store.getConfig().downloadDir || DOWNLOAD_DIR
-    const name = path.basename(String(body.name || ''))
-    const fp = path.join(dir, name)
-    if (!name || !fs.existsSync(fp)) return sendErr(res, new Error('文件不存在'), 404)
+    /* v61：支持子目录曲目（name 为相对下载目录的 posix 路径），越界路径一律拒绝 */
+    const fp = localSafePath(dir, body.name)
+    if (!fp || !fs.existsSync(fp)) return sendErr(res, new Error('文件不存在'), 404)
     try {
       fs.unlinkSync(fp)
       log('download', '删除', fp)

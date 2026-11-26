@@ -1932,12 +1932,13 @@
 
   function dlSongOf(item) {
     var raw = String((item && item.name) || '')
-    var nm = raw.replace(/\.[^.]+$/, '')
-    var parts = nm.split(' - ')
+    /* v61：name 可能是子目录相对路径（歌手/专辑/xx.mp3），显示取 basename，播放仍用完整相对路径 */
+    var base = String((item && item.title) || raw.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''))
+    var parts = base.split(' - ')
     var singer = parts.length > 1 ? parts[0].trim() : '本地下载'
-    var name = parts.length > 1 ? parts.slice(1).join(' - ').trim() : nm
+    var name = parts.length > 1 ? parts.slice(1).join(' - ').trim() : base
     return {
-      name: name || nm || raw,
+      name: name || base || raw,
       singer: singer,
       source: 'local',
       localUrl: API.downloadFileUrl(raw),
@@ -1963,7 +1964,8 @@
     el.setAttribute('aria-hidden', 'true')
     var others = $('#detailPanel').classList.contains('open') ||
       $('#searchPanel').classList.contains('open') ||
-      $('#importPanel').classList.contains('open')
+      $('#importPanel').classList.contains('open') ||
+      $('#localPanel').classList.contains('open')
     if (!others) document.body.classList.remove('panel-open')
   }
 
@@ -2068,6 +2070,116 @@
       if (sum) sum.textContent = '读取失败'
       body.innerHTML = '<div class="dl-empty">读取下载列表失败：' + esc(e && e.message ? e.message : '未知错误') + '</div>'
       dlSchedulePoll(false)
+    })
+  }
+
+  /* ---------------- v61 本地音乐库 ----------------
+     路线 A 落地：PC 端解密 / 转码后经「文件」App 拷进 App 的 Documents/下载，
+     服务端递归扫描（含子目录）并把曲目抛给 Player.playList。
+     播放走 localUrl 直连 /api/download/file（支持 Range 206），音效链与在线曲目完全一致。 */
+  var localState = { list: [], dir: '', filter: '', truncated: false }
+  /* iOS AVFoundation 可直接解码的容器；ape / wv / dsf / dff / ogg 需先转码再拷入 */
+  var LOCAL_PLAYABLE = { mp3: 1, m4a: 1, aac: 1, wav: 1, aif: 1, aiff: 1, flac: 1 }
+
+  function localSongOf(item) {
+    var song = dlSongOf(item)
+    if (song.singer === '本地下载') song.singer = '本地音乐'
+    return song
+  }
+
+  function localOpen() {
+    var el = $('#localPanel')
+    if (!el) return
+    el.classList.add('open')
+    el.setAttribute('aria-hidden', 'false')
+    document.body.classList.add('panel-open')
+    renderLocal()
+  }
+
+  function localClose() {
+    var el = $('#localPanel')
+    if (!el) return
+    el.classList.remove('open')
+    el.setAttribute('aria-hidden', 'true')
+    var others = $('#detailPanel').classList.contains('open') ||
+      $('#searchPanel').classList.contains('open') ||
+      $('#importPanel').classList.contains('open') ||
+      $('#dlPanel').classList.contains('open')
+    if (!others) document.body.classList.remove('panel-open')
+  }
+
+  function localMatch(it) {
+    var f = localState.filter.trim().toLowerCase()
+    if (!f) return true
+    var hay = String(it.title || '') + ' ' + String(it.name || '') + ' ' + String(it.dir || '')
+    return hay.toLowerCase().indexOf(f) >= 0
+  }
+
+  function paintLocal(err) {
+    var body = $('#localBody')
+    var sum = $('#localSum')
+    if (!body) return
+    if (err) {
+      if (sum) sum.textContent = '扫描失败'
+      body.innerHTML = '<div class="dl-empty">读取本地目录失败：' + esc((err && err.message) || '未知错误') + '</div>'
+      return
+    }
+    var all = localState.list
+    var shown = []
+    var i
+    for (i = 0; i < all.length; i++) if (localMatch(all[i])) shown.push({ it: all[i], i: i })
+
+    if (sum) {
+      var text = all.length
+        ? '共 ' + all.length + ' 首 · ' + fmtSize(all.reduce(function (s, x) { return s + (Number(x.size) || 0) }, 0))
+        : ''
+      if (localState.filter.trim()) text += (text ? ' · ' : '') + '筛选出 ' + shown.length + ' 首'
+      if (localState.truncated) text += (text ? ' · ' : '') + '目录过大已截断'
+      sum.textContent = text || '下载目录为空'
+    }
+
+    var cell = $('#cellLocalCount')
+    if (cell) cell.textContent = all.length ? all.length + ' 首' : '0 首'
+
+    if (!shown.length) {
+      if (all.length) {
+        body.innerHTML = '<div class="dl-empty">没有匹配「' + esc(localState.filter.trim()) + '」的曲目</div>'
+      } else {
+        body.innerHTML = '<div class="dl-empty">下载目录里还没有音频' +
+          '<span class="dl-dir-tip">把音频拷到「文件 → 我的 iPhone → 音乐 → ' + esc(localState.dir || '下载') +
+          '」后点右上角重新扫描</span></div>'
+      }
+      return
+    }
+
+    body.innerHTML = shown.map(function (row) {
+      var it = row.it
+      var sg = localSongOf(it)
+      var fmt = String(it.ext || '').toUpperCase()
+      var playable = !!LOCAL_PLAYABLE[String(it.ext || '').toLowerCase()]
+      var sub = (it.dir ? it.dir + ' · ' : '') + fmt + ' · ' + fmtSize(it.size) + ' · ' + fmtDlDate(it.mtime)
+      return '<div class="dl-row local-row' + (playable ? '' : ' local-row-np') + '" data-act="local-play" data-index="' + row.i + '">' +
+          '<span class="dl-ico' + (playable ? '' : ' local-ico-np') + '">' + ico(playable ? 'i-play' : 'i-alert') + '</span>' +
+          '<span class="dl-meta">' +
+            '<span class="dl-name">' + esc(sg.name) + '</span>' +
+            '<span class="dl-sub">' + esc(sub) + '</span>' +
+          '</span>' +
+          (playable ? '' : '<span class="local-badge">需转码</span>') +
+        '</div>'
+    }).join('')
+  }
+
+  function renderLocal() {
+    var body = $('#localBody')
+    if (!body) return
+    if (!localState.list.length) body.innerHTML = '<div class="dl-empty">正在扫描…</div>'
+    API.downloadList().then(function (res) {
+      localState.list = (res && res.list) || []
+      if (res && res.dir) localState.dir = res.dir
+      localState.truncated = !!(res && res.truncated)
+      paintLocal(null)
+    }).catch(function (e) {
+      paintLocal(e || new Error('未知错误'))
     })
   }
 
@@ -2187,6 +2299,8 @@
       '<div class="cell-group">' +
         '<button class="cell" type="button" data-act="open-queue"><span class="cell-ico">' + ico('i-queue') + '</span>' +
           '<span class="cell-label">播放队列</span><span class="cell-value" id="cellQueueCount">0 首</span>' + ico('i-down', 'cell-arrow') + '</button>' +
+        '<button class="cell" type="button" data-act="open-local"><span class="cell-ico">' + ico('i-note') + '</span>' +
+          '<span class="cell-label">本地音乐</span><span class="cell-value" id="cellLocalCount">查看</span>' + ico('i-down', 'cell-arrow') + '</button>' +
         '<button class="cell" type="button" data-act="open-downloads"><span class="cell-ico">' + ico('i-download') + '</span>' +
           '<span class="cell-label">我的下载</span><span class="cell-value" id="cellDlCount">查看</span>' + ico('i-down', 'cell-arrow') + '</button>' +
         '<button class="cell" type="button" data-act="open-quality"><span class="cell-ico">' + ico('i-note') + '</span>' +
@@ -2257,6 +2371,12 @@
 
       var cnt = $('#cellDlCount')
       if (cnt) cnt.textContent = (list.length ? list.length + ' 首' : '0 首') + (active.length ? ' · 下载中 ' + active.length : '')
+      /* v61：本地音乐入口同步曲目数（与下载列表同源，不额外发请求） */
+      var lcnt = $('#cellLocalCount')
+      if (lcnt) lcnt.textContent = list.length ? list.length + ' 首' : '0 首'
+      localState.list = list
+      if (res.dir) localState.dir = res.dir
+      localState.truncated = !!res.truncated
 
       var html = ''
       active.concat(failed).forEach(function (t) { html += dlTaskRow(t) })
@@ -4338,6 +4458,34 @@
         case 'open-sleep': openSleepSheet(); break
         case 'open-downloads': dlOpen(); break
         case 'dl-close': dlClose(); break
+        /* v61 本地音乐库 */
+        case 'open-local': localOpen(); break
+        case 'local-close': localClose(); break
+        case 'local-refresh':
+          toast('正在重新扫描本地目录…')
+          renderLocal()
+          break
+        case 'local-clear': {
+          var lf = $('#localFilter')
+          if (lf) lf.value = ''
+          localState.filter = ''
+          var lc = $('#localClear')
+          if (lc) lc.hidden = true
+          paintLocal(null)
+          break
+        }
+        case 'local-play': {
+          var lItem = localState.list[idx]
+          if (!lItem) break
+          if (!LOCAL_PLAYABLE[String(lItem.ext || '').toLowerCase()]) {
+            toast(String(lItem.ext || '').toUpperCase() + ' 格式 iOS 无法直接解码，建议转成 FLAC / ALAC 后再拷入')
+            break
+          }
+          var lQueue = localState.list.map(localSongOf)
+          Player.playList(lQueue, idx)
+          toast('播放本地：' + localSongOf(lItem).name)
+          break
+        }
         case 'dl-play': {
           if (!dlState.list[idx]) break
           var dlQueue = dlState.list.map(dlSongOf)
@@ -4656,6 +4804,20 @@
     $('#searchInput').addEventListener('keydown', function (e) {
       if (e.key === 'Enter') { e.preventDefault(); doSearch(false) }
     })
+
+    /* v61 本地音乐：筛选框实时过滤（纯前端，不打服务端） */
+    var localFilterEl = $('#localFilter')
+    if (localFilterEl) {
+      localFilterEl.addEventListener('input', function () {
+        localState.filter = this.value || ''
+        var cl = $('#localClear')
+        if (cl) cl.hidden = !this.value
+        paintLocal(null)
+      })
+      localFilterEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); this.blur() }
+      })
+    }
 
     /* 弹层关闭 */
     $$('[data-close]').forEach(function (el) {
