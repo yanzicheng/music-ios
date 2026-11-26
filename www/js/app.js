@@ -1638,13 +1638,26 @@
     flipWarm(src, function () {
       if (wall.cur !== src) return
       nxt.style.backgroundImage = 'url("' + src + '")'
+      /* v5.8：改成「新层压上去、旧层等被完全遮住后再摘」。
+         旧逻辑是两层同时做 opacity 交叉淡入淡出，各跑 .5s；壁纸层是
+         全屏 blur(26px) + scale(1.14)，过渡期间两层都要逐帧重取样重绘，
+         翻页那半秒的画面顿挫（"卡一下才恢复全屏"）主要来自这里。
+         现在任一时段只有一层在过渡，且时长收到 .26s。 */
+      nxt.style.zIndex = '2'
+      old.style.zIndex = '1'
       requestAnimationFrame(function () {
         if (wall.cur !== src) return
         nxt.classList.add('on')
-        old.classList.remove('on')
         /* 真正铺到屏幕上的是这张图：纸页取它，保证纸页底色与当前壁纸一致 */
         wall.visUrl = src
         wall.front = (nxt.id === 'wallA') ? 'wallA' : 'wallB'
+        setTimeout(function () {
+          if (wall.visUrl !== src) return
+          /* 旧层已被新层完全盖住：关掉过渡后瞬时移除，不再产生第二段合成动画 */
+          old.style.transition = 'none'
+          old.classList.remove('on')
+          setTimeout(function () { old.style.transition = '' }, 40)
+        }, 280)
       })
     })
   }
