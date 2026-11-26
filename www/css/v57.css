@@ -1,0 +1,135 @@
+/* ==========================================================================
+   v5.7 刷歌页上下滑跟手优化（纯性能补丁，不改翻页观感）
+
+   1) 拖动跟手：每帧只写一个数字型自定义属性 --flip-p（原始进度），
+      位移 / 旋转 / 缩放 / 透明度全部由本文件的 calc() 在合成阶段生成，
+      杜绝一帧内多次写内联样式（transform-origin + transform + opacity）
+      引发的样式重算与重排。
+   2) 旋转轴由 JS 每帧写 transform-origin 改为 f-up / f-down 两个方向类，
+      一次手势只切一次类；阻尼系数 --flip-d 同样只在变化时写一次。
+   3) 拖动 / 翻页过程中关闭卡片内部的 backdrop-filter：
+      卡片做 transform 位移时毛玻璃 backdrop 每帧都要重新取样重算，
+      这是 iOS WebView 上"推不动、跟手感发黏"的首要原因。
+   4) 合成层收敛：卡片静止时释放 will-change，只在拖动 / 进出场时提升；
+      纸页内部子元素动画与过渡全部停掉，一次翻页只跑一条变换动画。
+   5) 翻页容器纵向手势完全交给 JS，关掉 iOS 的动量滚动接管。
+
+   引入位置：index.html 中最后一个 <link>，覆盖此前所有样式。
+   ========================================================================== */
+
+/* ---------------- 1. 拖动跟手：每帧单次样式写入 ---------------- */
+/* 卡片默认值（未被 JS 覆盖时也不出错） */
+.swipe-card {
+  --flip-p: 0;
+  --flip-d: 1;
+}
+
+#swipeScroll .swipe-card {
+  /* 阻尼后的有效进度：p × d */
+  --flip-pd: calc(var(--flip-p) * var(--flip-d));
+  /* |p|：max() 取正负较大者，等价于 abs()，不依赖较新的 abs() 支持 */
+  --flip-n: max(var(--flip-p), calc(var(--flip-p) * -1));
+}
+
+/* 旋转轴跟着手势方向走：上滑顶边固定、下滑底边固定（与改造前一致） */
+#swipeScroll .swipe-card.dragging.f-up {
+  transform-origin: 50% 0%;
+}
+
+#swipeScroll .swipe-card.dragging.f-down {
+  transform-origin: 50% 100%;
+}
+
+/* 拖动态逐项等价于改造前：
+   位移 = p×h×0.5（百分比相对卡片自身高度）、旋转 = p×5deg、
+   缩放 = 1 - 0.028×|p|、透明度 = 1 - 0.32×|p|；
+   位移与旋转吃阻尼，缩放与透明度用原始 p —— 与旧实现完全一致。 */
+#swipeScroll .swipe-card.dragging {
+  transition: none;
+  will-change: transform, opacity;
+  transform: perspective(1400px)
+    translate3d(0, calc(var(--flip-pd) * 50%), 0)
+    rotateX(calc(var(--flip-pd) * 5deg))
+    scale(calc(1 - 0.028 * var(--flip-n)));
+  opacity: calc(1 - 0.32 * var(--flip-n));
+}
+
+/* ---------------- 2. 移动中的卡片关闭毛玻璃 ---------------- */
+/* 只关模糊，不动底色与文字，差异仅存在于手指拖动 / 翻页的几百毫秒内 */
+#swipeScroll .swipe-card.dragging *,
+#swipeScroll .swipe-card.dragging *::before,
+#swipeScroll .swipe-card.dragging *::after,
+.swipe-leaf,
+.swipe-leaf *,
+.swipe-leaf *::before,
+.swipe-leaf *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* ---------------- 3. 合成层收敛 ---------------- */
+/* 卡片静止时不常驻合成层；拖动与进出场动画期间才提升 */
+.swipe-card,
+#swipeScroll .swipe-card {
+  will-change: auto;
+}
+
+#swipeScroll .swipe-card.dragging,
+.swipe-card.page-in-up,
+.swipe-card.page-in-down {
+  will-change: transform, opacity;
+}
+
+/* 壁纸层不常驻提升：两层全屏大图各自挂在合成层上在 iOS 上很吃显存，
+   真到淡入淡出时浏览器会自动提升 */
+.swipe-wall .wall-layer {
+  will-change: auto;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* 纸页：单层变换即可，内部的动画与过渡全部停掉，避免一次翻页同时跑多条动画 */
+.swipe-leaf {
+  will-change: transform, opacity;
+  contain: layout paint;
+  pointer-events: none;
+}
+
+.swipe-leaf *,
+.swipe-leaf *::before,
+.swipe-leaf *::after {
+  animation: none !important;
+  transition: none !important;
+  /* 纸页是一张正在飞出去的静态快照：内部子元素不需要各自独立合成层 */
+  will-change: auto !important;
+}
+
+/* 键盘 / 按钮触发的翻页（无拖动前置）同样挂上即起动画，不等图片解码 */
+.swipe-leaf.leaf-up,
+.swipe-leaf.leaf-down {
+  will-change: transform, opacity;
+}
+
+/* 拖动态禁止卡片自身再跑任何 keyframes：上一轮切歌的 page-in 入场动画用的是
+   animation-fill-mode: both，一旦残留就会直接盖掉拖动的 transform，
+   表现为"手指在动、卡片不动"，直到动画结束才突然跳一下。 */
+#swipeScroll .swipe-card.dragging {
+  animation: none !important;
+}
+
+/* 松手未达阈值时的回弹：v34 / v37 对 .dragging 下的是 transition: none !important，
+   JS 写的内联 transition 会被它整条压掉，卡片从拖动位置瞬间跳回原位（观感就是"松手一顿"）。
+   这里给回弹态单独一条同样带 !important 的过渡，让卡片从当前拖动位置平滑归位。 */
+#swipeScroll .swipe-card.dragging.flip-back {
+  transition: transform .34s cubic-bezier(.22, .72, .28, 1), opacity .26s ease !important;
+}
+
+
+/* ---------------- 4. 翻页容器：纵向手势交给 JS ---------------- */
+#swipeScroll,
+.page[data-page="swipe"] .swipe-scroll {
+  touch-action: none;
+  overscroll-behavior: contain;
+  /* 关掉 iOS 动量滚动接管，避免手势流被滚动惯性抢走后掉帧 */
+  -webkit-overflow-scrolling: auto;
+}

@@ -1,4 +1,4 @@
-﻿/* ===========================================================
+/* ===========================================================
    应用外壳（移动端 / QQ音乐风格）
    -----------------------------------------------------------
    1) 迷你播放器 #mini 常驻：位于 #app 内、标签栏之上，
@@ -668,7 +668,7 @@
   }
 
   /* ---------------- 刷歌（全屏单曲 · 上下滑动切歌） ---------------- */
-  var swipeState = { list: [], idx: 0, loaded: false, loading: null, filling: null, shuffling: false }
+  var swipeState = { list: [], idx: 0, loaded: false, loading: null, filling: null, shuffling: false, domIdx: -1, sideTop: null }
   /* 调试出口：自动化验证刷歌流用，不影响界面 */
   window.__swipe = {
     state: swipeState,
@@ -1067,7 +1067,10 @@
 
   /* 垂直翻页：拖动跟随 + 松手吸附/回弹（汽水式上下滑切歌）
      交互细节：拖动时卡片随手指位移并轻微缩放+减淡，音乐不中断；松手按位移/速度决定翻页或回弹 */
-  var flip = { active: false, y0: 0, t0: 0, dy: 0, moved: false, busy: false, yLast: 0, tLast: 0, vy: 0 }
+  /* v5.7：h/rect/boxRect/scrollTop 是手势起点量一次的几何缓存，
+     raf 是跟手绘制的帧合并句柄，leaf 是预构建的"纸页"，stamp 用于识别纸页是否属于本次手势 */
+  var flip = { active: false, y0: 0, t0: 0, dy: 0, moved: false, busy: false, yLast: 0, tLast: 0, vy: 0,
+               dir: 0, h: 0, rect: null, boxRect: null, scrollTop: 0, raf: 0, leaf: null, liveLeaf: null, pending: false, damp: 0, stamp: 0, warm: {} }
 
   function flipCard() {
     var box = $('#swipeScroll')
@@ -1086,27 +1089,52 @@
     card.style.opacity = ''
     card.style.filter = ''
     card.style.transformOrigin = ''
-    card.classList.remove('dragging')
+    card.classList.remove('dragging', 'f-up', 'f-down', 'flip-back')
+    /* v5.7：跟手进度改由 --flip-p 承载，复位时连同阻尼系数一并清掉，避免残留位移 */
+    flip.damp = 0
+    if (card.style.removeProperty) {
+      card.style.removeProperty('--flip-p')
+      card.style.removeProperty('--flip-d')
+    }
   }
 
   /* v3.7 拖动跟随：纸页顺着手指方向被"推"，不带反向错觉。
      上滑 = 前进（下一页从底部推入、当页顶上翻）；下滑 = 回翻（下一页从顶部落下、当页向下翻回）。
-     旋转轴永远在手指前进方向的那一侧，因此视觉方向与手势方向一致。 */
+     旋转轴永远在手指前进方向的那一侧，因此视觉方向与手势方向一致。
+
+     v5.7 性能改造：原来一帧内连写 transform-origin / transform / opacity 三个内联样式，
+     每次都要重算样式并合成，iOS 上直接表现为"手指动了画面慢半拍"。
+     现在每帧只写一个数字型自定义属性 --flip-p，
+     位移/旋转/缩放/透明度全部由 v57.css 的 calc() 表达式在合成阶段生成；
+     旋转轴改为方向类 f-up / f-down，一次手势只切一次类。 */
   function flipApply(card, dy, h) {
     var p = Math.max(-1, Math.min(1, dy / (h || 1)))
     var damp = 1
     /* 首首/末首方向做阻尼，明确「到头了」 */
     if ((dy > 0 && swipeState.idx <= 0) || (dy < 0 && swipeState.idx >= swipeState.list.length - 1)) damp = 0.30
-    var d = dy * 0.5 * damp
-    var deg = p * 5 * damp
-    card.style.transformOrigin = dy < 0 ? '50% 0%' : '50% 100%'
-    card.style.transform = 'perspective(1400px) translate3d(0,' + d.toFixed(1) + 'px,0) rotateX(' +
-      deg.toFixed(2) + 'deg) scale(' + (1 - Math.min(0.028, Math.abs(p) * 0.028)).toFixed(3) + ')'
-    card.style.opacity = String((1 - Math.min(0.32, Math.abs(p) * 0.32)).toFixed(3))
+    var dir = dy < 0 ? -1 : 1
+    if (flip.dir !== dir) {
+      flip.dir = dir
+      card.classList.toggle('f-up', dir < 0)
+      card.classList.toggle('f-down', dir > 0)
+    }
+    /* 阻尼系数在整段手势里是常量，只在它变化的那一帧写一次 */
+    if (flip.damp !== damp) {
+      flip.damp = damp
+      card.style.setProperty('--flip-d', String(damp))
+    }
+    /* 每帧唯一的样式写入：写入的是「未阻尼」的原始进度 p，
+       阻尼、位移、旋转、缩放、透明度全部交给 v57.css 的 calc() 生成，
+       从而与改造前的逐项视觉等价（缩放/透明度用未阻尼 p，与旧代码一致） */
+    card.style.setProperty('--flip-p', p.toFixed(4))
   }
 
   function flipBack(card) {
     if (!card) return
+    /* v5.7：加上 flip-back 让 v57.css 里那条带 !important 的过渡生效。
+       .dragging 自带的 transition: none !important 会压掉内联 transition，
+       不这样处理卡片会从拖动位置直接跳回（观感是松手一顿）。 */
+    card.classList.add('flip-back')
     card.style.transition = 'transform .34s cubic-bezier(.22,.72,.28,1), opacity .26s ease'
     card.style.transform = 'perspective(1400px) translate3d(0,0,0) rotateX(0deg) scale(1)'
     card.style.opacity = '1'
@@ -1116,10 +1144,74 @@
     }, 350)
   }
 
+  /* ---------------- v5.7 纸页预构建 ----------------
+     松手起翻首帧不能再做 DOM 全量克隆 / 布局测量 / 图片解码：
+     手势一旦确认（第一次有效 move），就在空闲时把"纸页"克隆好放在 flip.leaf，
+     松手时直接挂上去起翻，首帧只剩 appendChild + 加一个动画类。 */
+  function flipLeafBuild(card) {
+    if (!card) return null
+    /* 几何缓存缺失（按钮/键盘触发的翻页没有前置手势）时才量一次，
+       手势路径下 fli.p rect/boxRect 在起手时已备好，这里不会再触发布局 */
+    if (!flip.rect || !flip.boxRect) {
+      var bx = $('#swipeScroll')
+      if (bx) {
+        flip.boxRect = bx.getBoundingClientRect()
+        flip.scrollTop = bx.scrollTop || 0
+      }
+      flip.rect = card.getBoundingClientRect()
+    }
+    var leaf = card.cloneNode(true)
+    var ids = leaf.querySelectorAll('[id]')
+    for (var i = 0; i < ids.length; i++) ids[i].removeAttribute('id')
+    leaf.classList.remove('dragging', 'f-up', 'f-down', 'page-in-up', 'page-in-down')
+    leaf.classList.add('swipe-leaf')
+    leaf.setAttribute('aria-hidden', 'true')
+    leaf.style.transition = 'none'
+    leaf.style.transform = ''
+    leaf.style.opacity = ''
+    leaf.style.transformOrigin = ''
+    leaf.style.filter = 'brightness(1)'
+    if (leaf.style.removeProperty) {
+      leaf.style.removeProperty('--flip-p')
+      leaf.style.removeProperty('--flip-d')
+    }
+    /* 纸页自带当前壁纸：取"屏幕上真正显示的那张"（visUrl 在淡入落地时写入），
+       不再 getComputedStyle（同步样式重算会拖慢松手首帧）；
+       新壁纸还在加载时继续用旧图，与屏幕所见一致 */
+    var bi = wall.visUrl || wall.curUrl || ''
+    if (bi) {
+      /* 纸页压暗必须轻：早期用 .84/.34/.92 会把整页压成灰黑，观感等同"一黑一闪" */
+      leaf.style.backgroundImage = 'linear-gradient(180deg, rgba(8,10,13,.42) 0%, rgba(8,10,13,.14) 52%, rgba(8,10,13,.50) 100%), url("' + bi + '")'
+      leaf.style.backgroundSize = 'cover, cover'
+      leaf.style.backgroundPosition = 'center, center'
+      leaf.style.backgroundRepeat = 'no-repeat, no-repeat'
+    } else {
+      leaf.style.background = '#0b0d10'
+    }
+    /* 尺寸位置用起手时量好的几何缓存，不再二次测量 */
+    if (flip.rect && flip.boxRect) {
+      leaf.style.left = (flip.rect.left - flip.boxRect.left) + 'px'
+      leaf.style.top = (flip.rect.top - flip.boxRect.top + (flip.scrollTop || 0)) + 'px'
+      leaf.style.width = flip.rect.width + 'px'
+      leaf.style.height = flip.rect.height + 'px'
+    }
+    leaf.__idx = swipeState.idx
+    leaf.__stamp = flip.stamp
+    return leaf
+  }
+
+  /* 空闲时预构建纸页：只在手势已确认后调用，避免每次点击都白克隆一份 DOM */
+  function flipPrepare() {
+    if (flip.leaf && flip.leaf.__stamp === flip.stamp) return
+    flip.leaf = flipLeafBuild(flipCard())
+  }
+
   /** 书本翻页切歌：
    *  1) 把当前页整页克隆成一张"纸"盖在最上层；
    *  2) 立刻换歌渲染新页——新页从第一帧就完整不透明地待在纸下面，因此不可能出现黑闪；
    *  3) 让纸绕上边（下一首）/下边（上一首）翻走，超过 90° 由 backface-visibility 收掉。
+   *
+   *  v5.7：把上面三步拆到不同帧，保证「松手 → 动画起跑」这一帧里没有任何阻塞工作。
    */
   function flipTo(step) {
     if (flip.busy) return
@@ -1172,108 +1264,96 @@
     }
     var up = step > 0
     flip.busy = true
+    if (flip.raf) { cancelAnimationFrame(flip.raf); flip.raf = 0 }
 
-    /* 1) 克隆纸页：去掉 id 防止与真卡重复，尺寸位置与真卡严格一致 */
-    var leaf = card.cloneNode(true)
-    var ids = leaf.querySelectorAll('[id]')
-    for (var i = 0; i < ids.length; i++) ids[i].removeAttribute('id')
-    leaf.classList.add('swipe-leaf')
-    leaf.setAttribute('aria-hidden', 'true')
-    leaf.style.transition = 'none'
-    leaf.style.transform = 'rotateX(0deg)'
-    leaf.style.filter = 'brightness(1)'
-    /* 纸页自带旧壁纸，翻起时连"纸"一起转走，而不是把内容层单独掀开放新页透出来 */
-    var actWall = document.querySelector('#wallA.on') || document.querySelector('#wallB.on')
-    if (actWall) {
-      var bi = ''
-      try { bi = window.getComputedStyle(actWall).backgroundImage } catch (err) { bi = '' }
-      if (actWall.style.backgroundImage) bi = actWall.style.backgroundImage
-      if (bi && bi !== 'none') {
-        /* 纸页压暗必须轻：早期用 .84/.34/.92 会把整页压成灰黑，观感等同"一黑一闪" */
-        leaf.style.backgroundImage = 'linear-gradient(180deg, rgba(8,10,13,.42) 0%, rgba(8,10,13,.14) 52%, rgba(8,10,13,.50) 100%), ' + bi
-        leaf.style.backgroundSize = 'cover, cover'
-        leaf.style.backgroundPosition = 'center, center'
-        leaf.style.backgroundRepeat = 'no-repeat, no-repeat'
-      } else {
-        leaf.style.background = '#0b0d10'
-      }
-    } else {
-      leaf.style.background = '#0b0d10'
-    }
-    var br = box.getBoundingClientRect()
-    var cr = card.getBoundingClientRect()
-    leaf.style.left = (cr.left - br.left) + 'px'
-    leaf.style.top = (cr.top - br.top + box.scrollTop) + 'px'
-    leaf.style.width = cr.width + 'px'
-    leaf.style.height = cr.height + 'px'
+    /* 1) 取纸页：手势期间已预构建好就直接用；
+          按钮/键盘触发的翻页没有前置手势，这里现场构建（仅此一次，不在跟手帧内） */
+    var leaf = flip.leaf
+    flip.leaf = null
+    if (!leaf || leaf.__idx !== swipeState.idx) leaf = flipLeafBuild(card)
     flipReset(card)
 
-    /* 2) 换歌 + 渲染新页（纸下面的新页始终不透明） */
-    swipeState.idx = next
-    swipeMarkSeen(swipeState.list[next])
-    swipeSeenFlush()
-    renderSwipe(true)
-    playSwipeCurrent()
-    renderSwipeWall()
-    swipeMaybePrefetch()
-
-    /* 纸页必须在 renderSwipe 重建卡片之后再挂上，否则会被 innerHTML 覆盖掉 */
-    box.appendChild(leaf)
-
-    var nc = flipCard()
-    if (nc) {
-      /* 新页从手势来的方向顺势推入：上滑从底部推上来，下滑从顶部落回来 */
-      var inCls = up ? 'page-in-up' : 'page-in-down'
-      nc.classList.add(inCls)
-      setTimeout(function () { nc.classList.remove(inCls) }, 520)
+    /* 2) 首帧只做「挂纸页 + 起翻」：不克隆、不测量、不重建、不解码 */
+    if (leaf) {
+      box.appendChild(leaf)
+      flip.liveLeaf = leaf
+      leaf.style.transformOrigin = up ? '50% 0%' : '50% 100%'
+      leaf.classList.add(up ? 'leaf-up' : 'leaf-down')
     }
 
-    /* 3) 纸页翻走（内联 transition/transform，避免被初始内联 rotateX(0) 卡住）
-       关键：新页封面图先预加载完再起翻，否则纸页掀起瞬间会露出还没加载的黑底封面，
-       就是老板所说的"一黑"。纸页盖在上面，等图的这一两帧肉眼完全看不见。 */
-    var started = false
-    function startLeaf() {
-      if (started) return
-      started = true
-      requestAnimationFrame(function () {
-        /* v3.7：纸页绕"前进方向那一侧"的边翻走——上翻=顶边固定、底边向后掀起；
-           回翻=底边固定、顶边向后掀下。旧版把原点放到了反向边，才会出现"反着翻"。 */
-        leaf.style.transformOrigin = up ? '50% 0%' : '50% 100%'
-        leaf.style.transition = 'none'
-        leaf.style.transform = ''
-        leaf.classList.add(up ? 'leaf-up' : 'leaf-down')
-      })
-    }
-    var nextSong = swipeState.list[swipeState.idx]
-    var coverSrc = nextSong && nextSong.img ? API.mediaUrl(nextSong.img, API.coverPx(420, 980)) : DEFAULT_COVER
-    var pre = new Image()
-    pre.onload = startLeaf
-    pre.onerror = startLeaf
-    pre.src = coverSrc
-    setTimeout(startLeaf, 180)
+    /* 3) 换歌与重建推到下一帧：此时纸页已完整盖住卡片区域，
+          innerHTML 重建、新封面解码、壁纸交叉淡入全部被纸页挡在后面 */
+    requestAnimationFrame(function () {
+      swipeState.idx = next
+      swipeMarkSeen(swipeState.list[next])
+      renderSwipe(true)
+      renderSwipeWall()
+      var nc = flipCard()
+      if (nc) {
+        /* 新页从手势来的方向顺势推入：上滑从底部推上来，下滑从顶部落回来 */
+        var inCls = up ? 'page-in-up' : 'page-in-down'
+        nc.classList.add(inCls)
+        setTimeout(function () { nc.classList.remove(inCls) }, 520)
+      }
+      playSwipeCurrent()
+      renderProgress()
+      swipeMaybePrefetch()
+    })
+
+    /* 4) 纸页翻走后收尾：清纸页、写回"已刷过"记录（localStorage 同步写放到这里，
+          不占用动画帧），并补一次歌词同步（动画期间歌词同步是挂起的） */
     setTimeout(function () {
-      if (leaf.parentNode) leaf.parentNode.removeChild(leaf)
+      if (leaf && leaf.parentNode) leaf.parentNode.removeChild(leaf)
+      if (flip.liveLeaf === leaf) flip.liveLeaf = null
       flip.busy = false
-    }, 620)
+      if (onSwipePage()) syncSwipeKaraoke(Player.state)
+    }, 480)
+    /* "已刷过"记录要写 localStorage（同步 IO），单独再往后放，
+       既不影响起翻，也不挡下一轮联动刷歌 */
+    setTimeout(swipeSeenFlush, 900)
   }
 
   /* v3.7：手势一起手就预热相邻曲目的封面与壁纸，
-     松手瞬间图片已在内存解码，纸页能立即起翻，不再出现 100~180ms 的等待停顿 */
+     松手瞬间图片已在内存解码，纸页能立即起翻，不再出现 100~180ms 的等待停顿。
+     v5.7：改为按 URL 建缓存（flip.warm），同一张图只创建/下载一次——
+     旧实现用 dir|img 做键，上/下相邻预热点都命中同一首时会重复 new Image + 重复请求。 */
+  function flipWarm(url, cb) {
+    if (!url) return null
+    var m = flip.warm || (flip.warm = {})
+    var it = m[url]
+    if (it) {
+      if (cb) {
+        if (it.done) { try { cb() } catch (e) {} } else it.cbs.push(cb)
+      }
+      return it
+    }
+    var keys = []
+    for (var k in m) { if (m.hasOwnProperty(k)) keys.push(k) }
+    if (keys.length > 16) { for (var d = 0; d < 6; d++) delete m[keys[d]] }
+    var img = new Image()
+    it = m[url] = { img: img, done: false, decoded: false, cbs: [] }
+    if (cb) it.cbs.push(cb)
+    img.onload = function () {
+      it.done = true
+      try {
+        if (img.decode) img.decode().then(function () { it.decoded = true }, function () {})
+        else it.decoded = true
+      } catch (err) { it.decoded = true }
+      var cbs = it.cbs
+      it.cbs = []
+      for (var i = 0; i < cbs.length; i++) { try { cbs[i]() } catch (e2) {} }
+    }
+    img.onerror = function () { it.failed = true }
+    img.src = url
+    return it
+  }
+
   function flipPreload(dir) {
     var t = swipeState.list[swipeState.idx + dir]
-    if (!t) return
-    if (!flip.warm) flip.warm = {}
-    var key = dir + '|' + (t.img || t.name || '')
-    if (flip.warm[key]) return
-    flip.warm[key] = 1
-    var c = new Image()
-    c.src = t.img ? API.mediaUrl(t.img, API.coverPx(420, 980)) : DEFAULT_COVER
-    try { if (c.decode) c.decode().catch(function () {}) } catch (err) {}
-    if (t.img) {
-      var w = new Image()
-      w.src = API.mediaUrl(t.img, API.coverPx(600, 900))
-      try { if (w.decode) w.decode().catch(function () {}) } catch (err2) {}
-    }
+    if (!t || !t.img) return
+    /* 卡片封面（新页用）与全屏壁纸（交叉淡入用）各预热一张，均已缓存则直接命中 */
+    flipWarm(API.mediaUrl(t.img, API.coverPx(420, 980)))
+    flipWarm(API.mediaUrl(t.img, API.coverPx(600, 900)))
   }
 
   /* v3.7.1：WebView 里 touchmove 一旦 preventDefault，Chrome 会把指针流 cancel 掉，
@@ -1285,18 +1365,47 @@
     return typeof e.clientY === 'number' ? e.clientY : 0
   }
 
+  /* v5.7：跟手绘制做帧合并——一帧内不管收到几次 touchmove，只画一次；
+     并且整场拖动不再读取 clientHeight / getBoundingClientRect（那会强制同步布局）。 */
+  function flipSchedule() {
+    if (flip.raf) return
+    flip.raf = requestAnimationFrame(function () {
+      flip.raf = 0
+      if (!flip.active) return
+      var card = flipCard()
+      if (card) flipApply(card, flip.dy, flip.h)
+    })
+  }
+
   function flipDown(e) {
     if (flip.busy || e.button > 0) return
+    var box = $('#swipeScroll')
     var card = flipCard()
-    if (!card) return
+    if (!card || !box) return
+    if (flip.raf) { cancelAnimationFrame(flip.raf); flip.raf = 0 }
     flip.active = true
     flip.moved = false
     flip.dy = 0
     flip.vy = 0
+    flip.dir = 0
+    flip.leaf = null
+    flip.stamp = (flip.stamp || 0) + 1
     flip.y0 = ptY(e)
     flip.t0 = Date.now()
-    flip.yLast = ptY(e)
+    flip.yLast = flip.y0
     flip.tLast = flip.t0
+    /* 只在手势起点量一次几何，之后整场拖动零布局读取 */
+    flip.boxRect = box.getBoundingClientRect()
+    flip.rect = card.getBoundingClientRect()
+    flip.h = flip.rect.height || 1
+    flip.scrollTop = box.scrollTop || 0
+    /* 阻尼系数默认 1（v57.css 里 --flip-d 的初值也是 1），
+       在这里对齐一次，避免拖动第一帧多写一次 --flip-d */
+    flip.damp = 1
+    card.style.setProperty('--flip-p', '0')
+    /* 上一轮切歌的入场动画（animation-fill-mode: both）会盖掉拖动变换，
+       手势一起手就把它摘掉，保证跟手位移从第一帧就生效 */
+    card.classList.remove('page-in-up', 'page-in-down')
     card.classList.add('dragging')
     flipPreload(1)
     flipPreload(-1)
@@ -1304,8 +1413,6 @@
 
   function flipMove(e) {
     if (!flip.active) return
-    var card = flipCard()
-    if (!card) return
     var cy = ptY(e)
     flip.dy = cy - flip.y0
     /* 用最近一次位移增量估算瞬时速度（px/ms），松手时判断是否“甩动” */
@@ -1319,17 +1426,39 @@
     if (!flip.moved) {
       if (Math.abs(flip.dy) < 8) return
       flip.moved = true
+      /* v5.7：确认是拖动后立即撤销按压反馈与待办涟漪：
+         卡片在位移的同时还挂着封面的缩放/变暗过渡，等于一次手势跑两条动画 */
+      if (ripWait) ripWait = null
+      clearPress()
     }
-    flipApply(card, flip.dy, card.clientHeight)
+    flipSchedule()
+    /* 纸页克隆排在本帧画完之后再做：既不占用跟手绘制的帧预算，
+       又能在手指抬起来之前把纸页备好，松手时零克隆 */
+    if (!flip.leaf && !flip.pending && !flip.busy) {
+      flip.pending = true
+      requestAnimationFrame(function () {
+        setTimeout(function () {
+          flip.pending = false
+          if (flip.active && !flip.busy) flipPrepare()
+        }, 0)
+      })
+    }
   }
 
   function flipUp() {
     if (!flip.active) return
     flip.active = false
     var card = flipCard()
+    /* 帧合并后可能还有一帧位移没画出来：松手时先补最后一次位置，
+       否则卡片会从"上一帧位置"跳到"松手位置"，观感就是松手一顿 */
+    if (flip.raf) {
+      cancelAnimationFrame(flip.raf)
+      flip.raf = 0
+      if (card && flip.moved) flipApply(card, flip.dy, flip.h)
+    }
     if (!card) return
     if (!flip.moved) { flipReset(card); return }
-    var h = card.clientHeight || 1
+    var h = flip.h || 1
     var passed = Math.abs(flip.dy) > h * 0.16
     var fast = Math.abs(flip.vy) > 0.55 && Math.abs(flip.dy) > 24
     if (passed || fast) {
@@ -1364,17 +1493,32 @@
       box.addEventListener('pointercancel', flipUp)
       box.addEventListener('pointerleave', function () { if (flip.active) flipUp() })
     }
-    window.addEventListener('resize', function () { positionSwipeSide(); flipReset(flipCard()) })
-    window.addEventListener('orientationchange', function () { setTimeout(positionSwipeSide, 260) })
+    window.addEventListener('resize', function () {
+      swipeState.sideTop = null
+      positionSwipeSide(true)
+      flipReset(flipCard())
+    })
+    window.addEventListener('orientationchange', function () {
+      swipeState.sideTop = null
+      setTimeout(function () { positionSwipeSide(true) }, 260)
+    })
   }
 
-  /** 右侧操作栏与封面垂直居中对齐（尺寸 390 宽下与封面右缘保持 ≥14px） */
-  function positionSwipeSide() {
+  /** 右侧操作栏与封面垂直居中对齐（尺寸 390 宽下与封面右缘保持 ≥14px）
+      v5.7：卡片布局对所有曲目完全一致，对齐结果只跟卡片自身尺寸有关，
+      因此首次量算后缓存，之后每次渲染直接复用——
+      否则每次切歌都要在 innerHTML 之后读 3 次几何，等于强制执行一次同步布局。 */
+  function positionSwipeSide(force) {
     var card = flipCard()
     if (!card) return
-    var cover = card.querySelector('.swipe-cover')
     var side = card.querySelector('.swipe-side')
-    if (!cover || !side) return
+    if (!side) return
+    if (!force && swipeState.sideTop != null) {
+      side.style.top = swipeState.sideTop
+      return
+    }
+    var cover = card.querySelector('.swipe-cover')
+    if (!cover) return
     var c = card.getBoundingClientRect()
     var cv = cover.getBoundingClientRect()
     var center = cv.top - c.top + cv.height / 2
@@ -1382,7 +1526,8 @@
     var min = half + 6
     var max = c.height - half - 6
     var y = Math.max(min, Math.min(max, center))
-    side.style.top = y.toFixed(1) + 'px'
+    swipeState.sideTop = y.toFixed(1) + 'px'
+    side.style.top = swipeState.sideTop
   }
 
   function swipeMove(step) {
@@ -1432,8 +1577,11 @@
   /* ---------------- 刷歌页全屏壁纸 ----------------
      双层交替 + 预加载完成后才淡入：切歌时旧壁纸一直在，新图加载完再交叉淡入，
      既铺满全屏也不会出现"一黑"的过渡 */
-  var wall = { front: 'wallA', cur: '' }
+  var wall = { front: 'wallA', cur: '', curUrl: '', visUrl: '' }
 
+  /* v5.7：
+     ① 壁纸图来自 flipWarm 缓存，已预热的同一张图不再新建 Image / 不再重复请求；
+     ② 去掉 void offsetWidth 那次强制回流——改成隔一帧再加 .on 让 opacity 过渡生效。 */
   function renderSwipeWall() {
     var a = $('#wallA')
     var b = $('#wallB')
@@ -1444,22 +1592,54 @@
       a.classList.remove('on')
       b.classList.remove('on')
       wall.cur = ''
+      wall.curUrl = ''
+      wall.visUrl = ''
       return
     }
     if (src === wall.cur) return
+    wall.cur = src
+    wall.curUrl = src
     var nxt = wall.front === 'wallA' ? b : a
     var old = wall.front === 'wallA' ? a : b
-    var probe = new Image()
-    probe.onload = function () {
+    flipWarm(src, function () {
+      if (wall.cur !== src) return
       nxt.style.backgroundImage = 'url("' + src + '")'
-      void nxt.offsetWidth
-      nxt.classList.add('on')
-      old.classList.remove('on')
-      wall.front = (nxt.id === 'wallA') ? 'wallA' : 'wallB'
-      wall.cur = src
+      requestAnimationFrame(function () {
+        if (wall.cur !== src) return
+        nxt.classList.add('on')
+        old.classList.remove('on')
+        /* 真正铺到屏幕上的是这张图：纸页取它，保证纸页底色与当前壁纸一致 */
+        wall.visUrl = src
+        wall.front = (nxt.id === 'wallA') ? 'wallA' : 'wallB'
+      })
+    })
+  }
+
+  /* v5.7：切歌只改卡片里真正变化的几个字段，不再整块 innerHTML 重建。
+     重建会丢掉已解码的封面位图、重跑一次 HTML 解析和整页样式重算，
+     正是旧版松手后"顿一下再开始翻"的主要来源之一。
+     结构不符（例如首次进入、异常 DOM）时返回 false，由调用方回退到整块重建。 */
+  function swipeCardPatch(card, s) {
+    if (!card || !s) return false
+    var name = card.querySelector('.swipe-name')
+    var singer = card.querySelector('.swipe-singer')
+    var img = card.querySelector('.swipe-cover img')
+    var fav = card.querySelector('.sw-act[data-act="swipe-fav"]')
+    if (!name || !singer || !img || !fav) return false
+    var cover = s.img ? API.mediaUrl(s.img, API.coverPx(420, 980)) : DEFAULT_COVER
+    if (name.textContent !== (s.name || '')) name.textContent = s.name || ''
+    singer.textContent = s.singer || '未知歌手'
+    /* 同一 URL 不重复赋值 src，避免浏览器把已解码的位图丢掉重新解码 */
+    if (img.getAttribute('data-src') !== cover) {
+      img.setAttribute('data-src', cover)
+      img.src = cover
     }
-    probe.onerror = function () {}
-    probe.src = src
+    var f = !!isFav(s)
+    if (fav.classList.contains('on') !== f) {
+      fav.classList.toggle('on', f)
+      fav.innerHTML = ico(f ? 'i-heart-fill' : 'i-heart') + '<span>喜欢</span>'
+    }
+    return true
   }
 
   function renderSwipe(resetScroll) {
@@ -1467,9 +1647,28 @@
     if (!box) return
     if (!swipeState.list.length) {
       box.innerHTML = '<div class="loading"><span class="spin"></span><span>正在准备推荐…</span></div>'
+      swipeState.domIdx = -1
       return
     }
-    box.innerHTML = swipeCardHtml(swipeState.list[swipeState.idx])
+    var s = swipeState.list[swipeState.idx]
+    var card = flipCard()
+    var patched = false
+    if (card && swipeState.domIdx >= 0 && swipeState.domIdx !== swipeState.idx &&
+        card.getAttribute('data-dom-idx') === String(swipeState.domIdx)) {
+      patched = swipeCardPatch(card, s)
+    }
+    if (!patched) {
+      /* 极端情况（DOM 结构不符）才整块重建：重建前先摘下正在翻的纸页，
+         避免被 innerHTML 一起清掉；同一帧内重新挂回，渲染树里不闪 */
+      var live = flip.liveLeaf
+      var detach = live && live.parentNode === box
+      if (detach) box.removeChild(live)
+      box.innerHTML = swipeCardHtml(s)
+      if (detach) box.appendChild(live)
+      card = flipCard()
+    }
+    swipeState.domIdx = swipeState.idx
+    if (card) card.setAttribute('data-dom-idx', String(swipeState.idx))
     if (resetScroll) box.scrollTop = 0
     positionSwipeSide()
     bindSwipeFlip()
@@ -1486,8 +1685,11 @@
     bar.__barBound = true
     var drag = false
     var lastPct = 0
+    /* v5.7：进度条几何在抬手期间不会变，按下时量一次缓存下来，
+       拖动过程中不再每帧 getBoundingClientRect（那是强制同步布局，拖动会发黏） */
+    var barRect = null
     var at = function (ev) {
-      var rect = bar.getBoundingClientRect()
+      var rect = barRect || bar.getBoundingClientRect()
       var tp = (ev.touches && ev.touches.length) ? ev.touches[0]
         : ((ev.changedTouches && ev.changedTouches.length) ? ev.changedTouches[0] : ev)
       var x = (tp.clientX || 0) - rect.left
@@ -1507,6 +1709,7 @@
       drag = true
       scrub.swipe = true
       if (ev.stopPropagation) ev.stopPropagation()
+      barRect = bar.getBoundingClientRect()
       preview(at(ev))
     }
     var move = function (ev) {
@@ -2520,7 +2723,11 @@
       else break
     }
     if (idx < 0) return
-    var lines = $$('.lyric-line', box)
+    /* v5.7：行元素缓存，避免每帧 querySelectorAll 新建节点列表 */
+    var lines = swipeKaraoke.lines
+    if (!lines || lines.length !== box.childElementCount) {
+      lines = swipeKaraoke.lines = $$('.lyric-line', box)
+    }
     var line = lines[idx]
     if (!line) return
     var start = list[idx].t || 0
@@ -2575,6 +2782,7 @@
     }
     box.innerHTML = list.map(swipeLyricLineHtml).join('')
     box.scrollTop = 0
+    swipeKaraoke.lines = null
     syncSwipeKaraoke(Player.state)
   }
 
@@ -2591,7 +2799,11 @@
       else break
     }
     if (idx < 0) return
-    var lines = $$('.lyric-line', box)
+    /* v5.7：行元素缓存，避免每帧 querySelectorAll 新建节点列表 */
+    var lines = swipeKaraoke.lines
+    if (!lines || lines.length !== box.childElementCount) {
+      lines = swipeKaraoke.lines = $$('.lyric-line', box)
+    }
     var line = lines[idx]
     if (!line) return
     var start = list[idx].t || 0
@@ -2632,7 +2844,9 @@
     var a = Player.audio
     if (!a || a.paused || !isFinite(a.currentTime)) return
     if (onPlayer) syncKaraoke(Player.state, a.currentTime)
-    if (onSwipe) syncSwipeKaraoke(Player.state, a.currentTime)
+    /* v5.7：翻页动画期间不推进逐字跟唱——纸页正在转，歌词被盖住看不见，
+       但每帧的全行 class 切换与字形测量会抢动画帧预算。动画结束后 flipTo 会补一次同步。 */
+    if (onSwipe && !flip.busy) syncSwipeKaraoke(Player.state, a.currentTime)
   }
   karaoke.raf = requestAnimationFrame(karaokeFrame)
 
@@ -4562,12 +4776,35 @@
     }, 600)
   }
 
+  var ripWait = null
+
+  /* 点按结束（未拖动）时补上涟漪；拖动/滑动则丢弃，不占用跟手帧 */
+  function flushRipple(e) {
+    var w = ripWait
+    ripWait = null
+    if (!w) return
+    if (Math.abs(((e && e.clientY) || 0) - w.y0) > 8) return
+    if (flip.active || flip.moved) return
+    requestAnimationFrame(function () { spawnRipple(w.el, w.x, w.y) })
+  }
+
+  document.addEventListener('pointerup', flushRipple, true)
+  document.addEventListener('pointercancel', function () { ripWait = null }, true)
+
   document.addEventListener('pointerdown', function (e) {
     var t = e.target
     if (!t || !t.closest) return
     var el = t.closest(RIP_SEL)
     if (!el) return
-    spawnRipple(el, e.clientX, e.clientY)
+    /* v5.7：刷歌页封面/按钮上的按下，先不建涟漪节点。
+       建节点 + 读一次几何 + 起一条新动画，正好压在上滑切歌的第一帧上，
+       是"手指动了画面慢半拍"的来源之一。改成确认是点按（未拖动）再补涟漪；
+       其它页面的按钮仍保持按下即出水波纹的原有手感。 */
+    if (el.closest && el.closest('#swipeScroll')) {
+      ripWait = { el: el, x: e.clientX, y: e.clientY, y0: e.clientY }
+    } else {
+      spawnRipple(el, e.clientX, e.clientY)
+    }
     var isMain = el.classList.contains('p-play') ||
       (el.classList.contains('sctrl') && el.classList.contains('main'))
     if (isMain) {
