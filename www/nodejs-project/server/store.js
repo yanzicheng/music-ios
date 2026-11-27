@@ -21,8 +21,12 @@ const DEFAULT_CONFIG = {
   // kw 是当前唯一稳定真 24bit 通道，默认优先平台随之改为 kw（tx 仅兜底）
   preferSource: ['kw'],
   // 音效配置（Web Audio 音效链）：随 config.json 持久化到 D:\学习\音乐\数据
+  /* v62：音效链与母带默认开启。此处刻意不写 cfgVer / mastering 字段：
+     前端 audiofx.js 以「配置里有没有 cfgVer」判定是新版还是老配置，
+     老配置（默认就是关闭状态，on:false 不代表用户意图）统一迁移到新默认开启；
+     用户在 v62+ 手动关闭母带后会带上 userSet:true，之后不再被覆盖。 */
   audioFx: {
-    enabled: false,
+    enabled: true,
     preset: 'original',
     eq: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], // 10 段增益 dB：31/62/125/250/500/1k/2k/4k/8k/16k
     width: 0,        // 立体声宽度 0~1

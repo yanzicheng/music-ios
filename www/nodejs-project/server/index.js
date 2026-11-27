@@ -144,6 +144,123 @@ function localScanAudio(root) {
   return { list: out, truncated: truncated }
 }
 
+/* ---------------- v62 本地库索引：在线点歌自动匹配本地高音质 ----------------
+   匹配需要「歌手 + 歌名」到本地文件的归一化比对。若每次点播都跑一遍
+   localScanAudio 全盘递归（最多 5000 文件）会明显拖慢起播，这里加一层
+   内存索引缓存：
+   - TTL 60s 兜底：用户从「文件」App 外部拷入的曲目最长 60s 后可被匹配到
+   - 下载完成 / 删除本地文件 / 请求带 refresh=1 时立即失效
+   索引只保留相对路径、体积与归一化键，不持有文件句柄。 */
+const LOCAL_INDEX_TTL = 60 * 1000
+
+/* 无损优先的格式权重：格式决定上限，同格式再按体积/时间决出 */
+const LOCAL_EXT_RANK = {
+  dsf: 100, dff: 100, ape: 96, wv: 94, flac: 92, wav: 88, aiff: 86, aif: 86,
+  m4a: 62, aac: 60, ogg: 58, opus: 56, mp3: 40,
+}
+const LOCAL_AUTOMATCH_MIN_RANK = 86  // 自动接管的门槛：只认 flac/wav/aiff/ape/wv/dsf/dff
+
+/* 自动接管额外要求「iOS/WKWebView 的 <audio> 能直接解码」：
+   ape / wv / dsf / dff 虽然更"无损"，但 iOS 无解码器，接管后必然先播失败再回退在线，
+   每首白等一轮，反而不如直接用在线音源。手动在「本地音乐」页点播不受此限制。 */
+const LOCAL_AUTOMATCH_EXT = { flac: 1, wav: 1, aiff: 1, aif: 1 }
+
+let localIndex = null  // { dir, at, files, truncated }
+
+/* 歌名/歌手归一化：统一全半角与大小写，去掉括号版本信息（(Live) /【伴奏】/[Remaster]）、
+   feat./ft. 之后的合作歌手、空白与标点。
+   例：「七里香 (Live)」→「七里香」；「Taylor Swift feat. Ed Sheeran」→「taylorswift」 */
+function normText(s) {
+  let t = String(s == null ? '' : s)
+  try { t = t.normalize('NFKC') } catch (_) {}
+  t = t.toLowerCase()
+  t = t.replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/【[^】]*】/g, ' ')
+  t = t.replace(/（[^）]*）/g, ' ')
+  t = t.replace(/(?:^|[\s\-_,./])(feat|ft|featuring)\.?\s.*$/, ' ')
+  t = t.replace(/[\s\u3000]+/g, '')
+  t = t.replace(/[^\u4e00-\u9fa5a-z0-9]+/g, '')
+  return t
+}
+
+function localIndexDrop() { localIndex = null }
+
+/* 保留版本词（Live / 伴奏 / Remaster）的归一化，仅用于同分时的版本偏好：
+   「七里香」请求不该被「七里香 (Live)」抢走，但点播的本身就是 Live 版时仍应命中 Live 文件 */
+function normFull(s) {
+  let t = String(s == null ? '' : s)
+  try { t = t.normalize('NFKC') } catch (_) {}
+  t = t.toLowerCase()
+  t = t.replace(/[\s\u3000]+/g, '')
+  t = t.replace(/[^\u4e00-\u9fa5a-z0-9]+/g, '')
+  return t
+}
+
+/* 落盘命名规则是 "${singer} - ${name}.ext"，这里反解回歌手/歌名 */
+function localSplitTitle(title) {
+  const t = String(title || '')
+  const i = t.indexOf(' - ')
+  if (i <= 0) return { singer: '', song: t }
+  return { singer: t.slice(0, i).trim(), song: t.slice(i + 3).trim() }
+}
+
+function localIndexGet(dir) {
+  const now = Date.now()
+  if (localIndex && localIndex.dir === dir && now - localIndex.at < LOCAL_INDEX_TTL) return localIndex
+  const scan = localScanAudio(dir)
+  const files = scan.list.map(function (it) {
+    const sp = localSplitTitle(it.title)
+    return {
+      name: it.name, title: it.title, ext: it.ext, dir: it.dir,
+      size: it.size, mtime: it.mtime,
+      singer: sp.singer, song: sp.song,
+      nName: normText(sp.song),
+      nSinger: normText(sp.singer),
+      nFull: normFull(sp.song),
+      rank: LOCAL_EXT_RANK[it.ext] || 30,
+    }
+  })
+  localIndex = { dir: dir, at: now, files: files, truncated: !!scan.truncated }
+  log('local', '索引重建', files.length, '首', dir)
+  return localIndex
+}
+
+/* 归一化评分：歌名全等 100 / 归一化后互相包含 58；歌手全等 +40、包含 +26、明显不符 -30
+   阈值 90 保证「歌名全等 + 无歌手信息」可用，同时挡掉「歌名近似 + 歌手不符」的错配 */
+function localMatchScore(nSinger, nName, f, nFull) {
+  if (!nName || !f.nName) return 0
+  let s
+  if (f.nName === nName) s = 100
+  else if (f.nName.indexOf(nName) >= 0 || nName.indexOf(f.nName) >= 0) s = 58
+  else return 0
+  if (nSinger && f.nSinger) {
+    if (f.nSinger === nSinger) s += 40
+    else if (f.nSinger.indexOf(nSinger) >= 0 || nSinger.indexOf(f.nSinger) >= 0) s += 26
+    else s -= 30
+  }
+  /* 版本词偏好：请求与文件都保留括号版本词后仍完全一致（如都带 live）加 6 分，
+     这样「七里香」优先无版本后缀的文件，「七里香 (Live)」点播时才命中 Live 文件 */
+  if (nFull && f.nFull && f.nFull === nFull) s += 6
+  return s
+}
+
+function localHitView(f, score) {
+  const lossless = f.rank >= LOCAL_AUTOMATCH_MIN_RANK
+  return {
+    name: f.name,
+    title: f.title,
+    ext: f.ext,
+    dir: f.dir,
+    size: f.size,
+    mtime: f.mtime,
+    singer: f.singer,
+    song: f.song,
+    score: score,
+    lossless: lossless,
+    rank: f.rank,
+    url: '/api/download/file?name=' + encodeURIComponent(f.name),
+  }
+}
+
 const PORT = Number(process.env.LX_PORT || 34200)
 const HOST = process.env.LX_HOST || '127.0.0.1'
 
@@ -485,6 +602,7 @@ async function runDownload(task) {
     task.size = st.size
     task.quality = info.quality
     task.finishedAt = Date.now()
+    localIndexDrop()  // v62：新文件落盘，本地匹配索引立即失效
     log('download', '完成', task.filePath, st.size)
   } catch (e) {
     task.status = 'error'
@@ -984,6 +1102,60 @@ async function handleApi(req, res, url) {
     return sendJson(res, { ok: true, list: [...downloadTasks.values()].reverse().slice(0, 100) })
   }
 
+  /* ---- v62 在线点歌自动匹配本地高音质文件 ----
+     GET /api/local/find?singer=&name=&any=1&refresh=1&limit=5
+     默认只返回无损类（flac/wav/aiff/ape/wv/dsf/dff），避免本地 128K mp3
+     把在线无损拽下来；any=1 时放开到任意音频格式。 */
+  if (p === '/local/find') {
+    const name = String(url.searchParams.get('name') || '').trim()
+    const singer = String(url.searchParams.get('singer') || '').trim()
+    const dir = store.getConfig().downloadDir || DOWNLOAD_DIR
+    /* 允许 name 为空时只做「索引失效」动作：前端在「本地音乐」面板刷新后调用 */
+    if (url.searchParams.get('refresh') === '1') {
+      localIndexDrop()
+      if (!name) return sendJson(res, { ok: true, refreshed: true, hit: null, hits: [], scanned: 0 })
+    }
+    if (!name) return sendJson(res, { ok: true, hit: null, hits: [], scanned: 0, truncated: false })
+    let idx
+    try {
+      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+        return sendJson(res, { ok: true, hit: null, hits: [], scanned: 0, truncated: false })
+      }
+      idx = localIndexGet(dir)
+    } catch (e) {
+      return sendErr(res, e, 500)
+    }
+    const anyQ = url.searchParams.get('any') === '1'
+    const minRank = anyQ ? 0 : LOCAL_AUTOMATCH_MIN_RANK
+    const limit = Math.min(20, Math.max(1, parseInt(url.searchParams.get('limit'), 10) || 5))
+    const nName = normText(name)
+    const nSinger = normText(singer)
+    const nFull = normFull(name)
+    const hits = []
+    for (let i = 0; i < idx.files.length; i++) {
+      const f = idx.files[i]
+      if (f.rank < minRank) continue
+      /* 自动接管还要过一遍"iOS 可解码"白名单；any=1（手动查找）放开 */
+      if (!anyQ && !LOCAL_AUTOMATCH_EXT[f.ext]) continue
+      const score = localMatchScore(nSinger, nName, f, nFull)
+      if (score >= 90) hits.push({ f: f, score: score })
+    }
+    hits.sort(function (a, b) {
+      if (b.score !== a.score) return b.score - a.score
+      if (b.f.rank !== a.f.rank) return b.f.rank - a.f.rank
+      if (b.f.size !== a.f.size) return b.f.size - a.f.size
+      return b.f.mtime - a.f.mtime
+    })
+    const list = hits.slice(0, limit).map(function (h) { return localHitView(h.f, h.score) })
+    return sendJson(res, {
+      ok: true,
+      hit: list.length ? list[0] : null,
+      hits: list,
+      scanned: idx.files.length,
+      truncated: !!idx.truncated,
+    })
+  }
+
   /* ---- v3.10 下载管理：列出 / 播放 / 删除 ---- */
   if (p === '/download/list') {
     const dir = store.getConfig().downloadDir || DOWNLOAD_DIR
@@ -1056,6 +1228,7 @@ async function handleApi(req, res, url) {
     if (!fp || !fs.existsSync(fp)) return sendErr(res, new Error('文件不存在'), 404)
     try {
       fs.unlinkSync(fp)
+      localIndexDrop()  // v62：文件已删，本地匹配索引立即失效
       log('download', '删除', fp)
       return sendJson(res, { ok: true })
     } catch (e) {

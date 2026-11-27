@@ -116,8 +116,18 @@
     loud:  { name: '响度', glue: 0.85, sat: 0.85, air: 0.83, width: 1.00, presence: 1.0, presenceFreq: 3000, makeup: 2.4 },
   }
 
+  /* v62：母带总线改为默认开启（默认风格仍为 clear，着色极轻：低频单声道化 + 少量空气感）。
+     旧版本（v60/v61）母带默认关闭，升级时必须按"有没有人工修改痕迹"决定是否沿用新默认：
+       · userSet === true            —— 用户在 UI 里手动开关过母带，完全尊重其选择
+       · 老配置无 userSet 但有痕迹    —— 视为人工选择（开过、换过风格、动过滑杆），保留其 on 值
+       · 老配置无 userSet 且无痕迹    —— 迁移到新默认（开启），这是本次改版的主目标 */
+  var MASTER_DEFAULT_ON = true
+  var AUDIOFX_CFG_VER = 2
+
   var cfg = {
-    enabled: false,
+    /* v62：音效链默认开启，否则母带默认开启在"音效链没建"的情况下也不会生效 */
+    enabled: MASTER_DEFAULT_ON,
+    cfgVer: AUDIOFX_CFG_VER,
     preset: 'original',
     eq: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     width: 0,
@@ -130,9 +140,10 @@
     fade: 0,
     rate: 1,
     customPresets: {},
-    /* v60 母带总线：on 开关 + 风格预设 + 四个归一量参数（0~1） */
+    /* v60 母带总线：on 开关 + 风格预设 + 四个归一量参数（0~1）；v62 起默认开启 */
     mastering: {
-      on: false,
+      on: MASTER_DEFAULT_ON,
+      userSet: false,
       preset: 'clear',
       glue: MASTER_PRESETS.clear.glue,
       sat: MASTER_PRESETS.clear.sat,
@@ -207,6 +218,7 @@
   function cloneCfg() {
     return {
       enabled: !!cfg.enabled,
+      cfgVer: AUDIOFX_CFG_VER,
       preset: cfg.preset,
       eq: cfg.eq.slice(),
       width: cfg.width,
@@ -221,6 +233,7 @@
       customPresets: JSON.parse(JSON.stringify(cfg.customPresets || {})),
       mastering: {
         on: !!cfg.mastering.on,
+        userSet: !!cfg.mastering.userSet,
         preset: cfg.mastering.preset,
         glue: cfg.mastering.glue,
         sat: cfg.mastering.sat,
@@ -739,6 +752,15 @@
 
       attached = true
       meter.songStart = 0
+      /* v62：默认开链后 AudioContext 可能因自动播放策略仍是 suspended，
+         等它真正进入 running 时再下发一次参数，避免"面板已开但实际没生效"。 */
+      try {
+        ctx.onstatechange = function () {
+          if (ctx && ctx.state === 'running') {
+            try { apply() } catch (e) {}
+          }
+        }
+      } catch (e) {}
       startMetering()
       apply()
       return true
@@ -1206,6 +1228,7 @@
 
     /** 载入持久化配置（不建链，避免未开音效时被 AudioContext 挂起影响出声） */
     load: function (saved) {
+      var migrated = false
       if (saved && typeof saved === 'object') {
         cfg.enabled = !!saved.enabled
         cfg.preset = saved.preset || 'original'
@@ -1225,15 +1248,50 @@
         var sm = saved.mastering && typeof saved.mastering === 'object' ? saved.mastering : {}
         var smp = MASTER_PRESETS[sm.preset] ? sm.preset : 'clear'
         cfg.mastering = {
-          on: !!sm.on,
+          on: MASTER_DEFAULT_ON,
+          userSet: false,
           preset: smp,
           glue: clamp(sm.glue === undefined ? MASTER_PRESETS[smp].glue : sm.glue, 0, 1),
           sat: clamp(sm.sat === undefined ? MASTER_PRESETS[smp].sat : sm.sat, 0, 1),
           air: clamp(sm.air === undefined ? MASTER_PRESETS[smp].air : sm.air, 0, 1),
           width: clamp(sm.width === undefined ? MASTER_PRESETS[smp].width : sm.width, 0, 1),
         }
+        /* v62：母带默认开启的配置兼容，按四级判定：
+             1) userSet === true —— 用户在 v62+ 手动开/关过母带，永久尊重其选择
+             2) cfgVer >= 2     —— 已是新版本配置，按存储值（缺字段才回落默认）
+             3) 老配置但有痕迹   —— 换过风格或动过滑杆（值偏离 clear 默认），视为人工调过母带，
+                                   保留其存下的 on（尤其"曾手动关掉"必须保持关闭）
+             4) 其余为老配置    —— v60/v61 母带默认就是关闭，on:false 只是默认值而非用户意图，
+                                   因此统一迁移到新默认（开启）；老配置里用户主动开启过的
+                                   （on:true）结果同样为开启，与旧行为一致。 */
+        var savedVer = Number(saved.cfgVer) || 0
+        var userSet = sm.userSet === true
+        var touched = false
+        if (sm.preset && MASTER_PRESETS[sm.preset] && sm.preset !== 'clear') touched = true
+        ;['glue', 'sat', 'air', 'width'].forEach(function (k) {
+          if (sm[k] !== undefined && Math.abs(Number(sm[k]) - MASTER_PRESETS.clear[k]) > 0.001) touched = true
+        })
+        cfg.mastering.userSet = userSet
+        if (userSet) {
+          cfg.mastering.on = !!sm.on
+        } else if (savedVer >= AUDIOFX_CFG_VER) {
+          cfg.mastering.on = sm.on === undefined ? MASTER_DEFAULT_ON : !!sm.on
+        } else if (touched) {
+          cfg.mastering.on = !!sm.on
+        } else {
+          cfg.mastering.on = MASTER_DEFAULT_ON
+        }
+        /* 老配置升级时，若母带被新默认打开而音效链还关着（v60/v61 默认关），一并打开；
+           新版配置则尊重用户对音效链的开关，不再强行打开（否则关掉音效链重启会被复位） */
+        if (!userSet && savedVer < AUDIOFX_CFG_VER && cfg.mastering.on && !cfg.enabled) cfg.enabled = true
+        migrated = savedVer < AUDIOFX_CFG_VER || sm.userSet === undefined
+      } else {
+        /* 没有历史配置（首次安装）：直接用新默认 */
+        migrated = true
       }
       if (audioEl && cfg.enabled) { build(); resume(); apply() }
+      /* 迁移后立刻回写一次，把 cfgVer / userSet 落到磁盘，避免每次启动重复迁移 */
+      if (migrated) persist()
       return cloneCfg()
     },
 
@@ -1260,6 +1318,8 @@
     /** 母带总线开关：关闭时信号只过一个增益为 1 的节点，与没有母带模块等价 */
     setMastering: function (on) {
       cfg.mastering.on = !!on
+      /* v62：记下"用户手动开/关过"，后续升级不再覆盖他的选择 */
+      cfg.mastering.userSet = true
       /* 母带只能在音效链里生效：单独打开母带时自动把音效链一并打开，语义更直观 */
       if (cfg.mastering.on && !cfg.enabled) cfg.enabled = true
       if (cfg.enabled) { build(); resume() }
@@ -1273,6 +1333,7 @@
       var p = MASTER_PRESETS[key]
       if (!p) return false
       cfg.mastering.preset = key
+      cfg.mastering.userSet = true
       cfg.mastering.glue = p.glue
       cfg.mastering.sat = p.sat
       cfg.mastering.air = p.air
@@ -1290,6 +1351,7 @@
     setMasterParam: function (key, v) {
       if (['glue', 'sat', 'air', 'width'].indexOf(key) < 0) return false
       cfg.mastering[key] = clamp(v, 0, 1)
+      cfg.mastering.userSet = true
       cfg.mastering.on = true
       if (!cfg.enabled) cfg.enabled = true
       build()
@@ -1304,6 +1366,7 @@
       var mp = masterPreset()
       return {
         on: !!cfg.mastering.on,
+        userSet: !!cfg.mastering.userSet,
         preset: cfg.mastering.preset,
         presetName: mp.name,
         glue: cfg.mastering.glue,

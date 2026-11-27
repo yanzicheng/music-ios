@@ -46,6 +46,7 @@
     lyricIndex: -1,
     error: '',
     booting: false,
+    localMatch: null,       // v62：当前曲目命中的本地文件（null 表示走在线音源）
   }
 
   var handlers = {}
@@ -98,6 +99,25 @@
     } catch (e) { console.warn('[player] fx', e) }
   }
 
+  /* v62：音效链（含母带总线）默认开启后，AudioContext 必须在真实用户手势里创建，
+     否则 iOS WKWebView 会把它挂起到点击结束，导致 createMediaElementSource 之后整条链
+     静音。起播流程要等网络解析，那时已经不在手势上下文里，因此这里在"第一次触摸/点击"
+     时就把链接起来（此时还没开始播放，先接管源节点是安全的）。 */
+  var fxGestureBound = false
+  function bindFxGesture() {
+    if (fxGestureBound) return
+    fxGestureBound = true
+    var fire = function () {
+      document.removeEventListener('pointerdown', fire, true)
+      document.removeEventListener('touchstart', fire, true)
+      ensureFx()
+    }
+    try {
+      document.addEventListener('pointerdown', fire, true)
+      document.addEventListener('touchstart', fire, true)
+    } catch (e) { fxGestureBound = false }
+  }
+
   /* ---------------- 播放地址：缓存 + 并发去重 + 超时 ---------------- */
   function cacheGet(key) {
     var c = urlCache[key]
@@ -133,6 +153,59 @@
     })
   }
 
+  /* ---------------- v62 在线点歌自动匹配本地高音质文件 ----------------
+     播放链路新增一个「本地命中」分支：解析地址前按 歌手+歌名 查本地库，
+     命中无损类文件就直接用本地文件播放，未命中才走原 API.songUrl 逻辑。
+     约束：只发一次轻量查询（服务端有内存索引缓存 + 前端结果缓存），
+     不新建 AudioContext、不碰 MediaElementSource，切歌依旧只换 audio.src。 */
+  var LOCAL_MATCH_TTL = 10 * 60 * 1000
+  var localMatchCache = {}     // songKey -> { at, hit }
+  var localMatchInflight = {}  // songKey -> Promise
+  var localAuto = true         // 用户可在音质面板关闭「自动使用本地无损」
+
+  function localMatchFind(song) {
+    if (!song || song.localUrl || !localAuto) return Promise.resolve(null)
+    if (!API.localFind) return Promise.resolve(null)
+    var k = songKey(song)
+    var c = localMatchCache[k]
+    if (c && c.at + LOCAL_MATCH_TTL > Date.now()) return Promise.resolve(c.hit)
+    if (localMatchInflight[k]) return localMatchInflight[k]
+    var p = API.localFind(song.singer || '', song.name || '', { limit: 3 }).then(function (res) {
+      var hit = (res && res.ok && res.hit) ? res.hit : null
+      localMatchCache[k] = { at: Date.now(), hit: hit }
+      delete localMatchInflight[k]
+      return hit
+    }, function () {
+      /* 查询失败不能拖累起播：记一个短空结果，直接回落到在线音源 */
+      localMatchCache[k] = { at: Date.now(), hit: null }
+      delete localMatchInflight[k]
+      return null
+    })
+    localMatchInflight[k] = p
+    return p
+  }
+
+  function localInfoOf(hit) {
+    return {
+      url: API.downloadFileUrl(hit.name),
+      local: true,
+      localMatch: hit,
+      realQuality: hit.lossless ? '本地无损' : '本地',
+      /* realInfo 直接缓存，命中缓存时 UI 仍能显示格式与体积 */
+      realInfo: {
+        local: true,
+        localMatch: hit,
+        codec: hit.ext,
+        path: hit.name,
+        size: hit.size,
+        bitsPerSample: 0,
+        sampleRate: 0,
+        channels: 0,
+      },
+      cached: true,
+    }
+  }
+
   function resolveUrl(song, quality, opts) {
     opts = opts || {}
     var q = quality || S.quality
@@ -151,22 +224,41 @@
 
     if (!opts.bypass) {
       var hit = cacheGet(key)
-      if (hit) return Promise.resolve({ url: hit.url, realQuality: hit.realQuality, realInfo: hit.info, cached: true })
+      if (hit) return Promise.resolve({ url: hit.url, local: !!(hit.info && hit.info.local), localMatch: (hit.info && hit.info.localMatch) || null, realQuality: hit.realQuality, realInfo: hit.info, cached: true })
       if (urlInflight[key]) return urlInflight[key]
     }
 
-    var p = withTimeout(API.songUrl(song, q), opts.timeout || URL_TIMEOUT).then(function (info) {
-      if (!info || !info.url) throw new Error('该歌曲暂无可用音源')
-      cacheSet(key, info.url, info.realQuality || info.quality || q, info)
-      delete urlInflight[key]
-      return info
-    }, function (e) {
-      delete urlInflight[key]
-      throw e
-    })
+    function remoteResolve() {
+      var p = withTimeout(API.songUrl(song, q), opts.timeout || URL_TIMEOUT).then(function (info) {
+        if (!info || !info.url) throw new Error('该歌曲暂无可用音源')
+        cacheSet(key, info.url, info.realQuality || info.quality || q, info)
+        delete urlInflight[key]
+        return info
+      }, function (e) {
+        delete urlInflight[key]
+        throw e
+      })
+      if (!opts.bypass) urlInflight[key] = p
+      return p
+    }
 
-    if (!opts.bypass) urlInflight[key] = p
-    return p
+    /* v62：先查本地库。命中同曲无损文件直接走本地；未命中/查询失败回落在线音源。
+       bypass（失败重试）时跳过本地，避免本地文件损坏导致反复卡死同一首。 */
+    if (!opts.bypass && opts.local !== false) {
+      var lp = localMatchFind(song).then(function (lm) {
+        if (lm && lm.url) {
+          var info = localInfoOf(lm)
+          cacheSet(key, info.url, info.realQuality, info.realInfo)
+          return info
+        }
+        return remoteResolve()
+      })
+      urlInflight[key] = lp
+      lp.catch(function () {}).then(function () { if (urlInflight[key] === lp) delete urlInflight[key] })
+      return lp
+    }
+
+    return remoteResolve()
   }
 
   /* 预热：本地解析前 n 首 + 让服务端后台预取（服务端有并发去重与对冲竞速） */
@@ -361,15 +453,33 @@
 
     /* 命中本地缓存：立即上屏播放，杜绝"点下去先转圈" */
     var hit = cacheGet(key + '|' + q)
-    var p = hit
-      ? Promise.resolve({ url: hit.url, realQuality: hit.realQuality, realInfo: hit.info, cached: true })
-      : resolveUrl(song, q, { bypass: !!opts.bypass, timeout: opts.timeout })
+    var p
+    if (!opts.bypass && localAuto) {
+      /* v62：本地无损优先于远端缓存——预热缓存的在线地址不能盖住本地命中 */
+      p = localMatchFind(song).then(function (lm) {
+        if (lm && lm.url) {
+          var linfo = localInfoOf(lm)
+          cacheSet(key, linfo.url, linfo.realQuality, linfo.realInfo)
+          return linfo
+        }
+        var h2 = cacheGet(key + '|' + q)
+        if (h2) return { url: h2.url, local: !!(h2.info && h2.info.local), localMatch: (h2.info && h2.info.localMatch) || null, realQuality: h2.realQuality, realInfo: h2.info, cached: true }
+        return resolveUrl(song, q, { bypass: !!opts.bypass, timeout: opts.timeout })
+      })
+    } else {
+      /* bypass（失败自愈）时不能吃本地缓存，否则本地文件损坏会反复卡在同一首 */
+      var useHit = hit && !(opts.bypass && hit.info && hit.info.local)
+      p = useHit
+        ? Promise.resolve({ url: hit.url, local: !!(hit.info && hit.info.local), localMatch: (hit.info && hit.info.localMatch) || null, realQuality: hit.realQuality, realInfo: hit.info, cached: true })
+        : resolveUrl(song, q, { bypass: !!opts.bypass, timeout: opts.timeout })
+    }
 
     return p.then(function (info) {
       if (token !== loadToken) return null
       if (!info || !info.url) throw new Error('该歌曲暂无可用音源')
       S.realQuality = info.realQuality || info.quality || q
       S.realInfo = info.realInfo || info || null
+      S.localMatch = info.local ? (info.localMatch || null) : null
       /* v56：把服务端 probe 出的真实流参数交给音效引擎，供诊断面板显示 */
       if (window.AudioFX && AudioFX.setStreamInfo) {
         try {
@@ -385,6 +495,8 @@
       audio.load()
       ensureFx()
       emit('quality', S.realQuality, 'real')
+      /* v62：告知 UI 本曲是否走了本地文件，用于显示「本地无损」标识 */
+      emit('local', S.localMatch)
       return audio.play()
     }).then(function (r) {
       if (r === null || token !== loadToken) return
@@ -413,6 +525,15 @@
       }
 
       failCount[key] = (failCount[key] || 0) + 1
+
+      /* v62：这一轮如果走的是本地文件（格式不被支持 / 文件损坏），把它从可命中集合里摘掉，
+         并清掉指向本地地址的缓存，保证自愈重试与后续播放都回到在线音源 */
+      if (S.localMatch) {
+        delete urlCache[key + '|' + q]
+        localMatchCache[key] = { at: Date.now(), hit: null }
+        S.localMatch = null
+        emit('local', null)
+      }
 
       /* v3.19：失败不再"一次就切歌"，改成同曲自愈两轮：
          第 1 轮 绕过缓存换音源重解析（同档位），第 2 轮 同曲降档重解析。
@@ -722,12 +843,36 @@
     cyclePlayMode: cyclePlayMode,
     get playMode() { return S.playMode },
     removeFromQueue: removeFromQueue,
+    /* v62：在线点歌自动匹配本地高音质（本地无损优先）开关 */
+    get localAuto() { return localAuto },
+    setLocalAuto: function (v) {
+      localAuto = !!v
+      try { localStorage.setItem('localAuto', localAuto ? '1' : '0') } catch (e) {}
+      if (!localAuto) {
+        /* 关掉后清空本地命中缓存，下次起播走在线音源 */
+        localMatchCache = {}
+        S.localMatch = null
+        emit('local', null)
+      }
+      emit('localAuto', localAuto)
+      return localAuto
+    },
+    /* 手动刷新本地库（外部拷入新文件后立即生效，无需等 60s TTL） */
+    refreshLocal: function () {
+      localMatchCache = {}
+      if (!API.localFind) return Promise.resolve(false)
+      return API.localFind('', '', { refresh: true }).then(function () { return true }, function () { return false })
+    },
     clear: cleanup,
     init: function () {
+      bindFxGesture()
       try {
         var pm = localStorage.getItem('pmode')
         if (pm && MODES.indexOf(pm) >= 0) S.playMode = pm
         emit('mode', S.playMode)
+        var la = localStorage.getItem('localAuto')
+        if (la === '0') localAuto = false
+        emit('localAuto', localAuto)
       } catch (e) {}
       return API.config().then(function (res) {
         if (res && res.config && res.config.quality) {

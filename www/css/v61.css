@@ -144,3 +144,19 @@
   color: var(--sub);
   word-break: break-all;
 }
+
+/* ---------------- 5. v62 本地命中标识（播放页底栏音质标签） ---------------- */
+#player .p-act b.local {
+  color: var(--green-l, #6ee7a8);
+}
+#player .p-act b.local::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-right: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  vertical-align: 1px;
+  opacity: .9;
+}

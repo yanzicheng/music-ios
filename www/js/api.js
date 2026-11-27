@@ -506,6 +506,16 @@
     downloadFileUrl: function (name) {
       return url('/api/download/file?name=' + encodeURIComponent(name))
     },
+
+    /* v62 在线点歌自动匹配本地高音质文件：按 歌手+歌名 查本地库（服务端内存索引） */
+    localFind: function (singer, name, opts) {
+      opts = opts || {}
+      var qs = '?singer=' + encodeURIComponent(singer || '') + '&name=' + encodeURIComponent(name || '')
+      if (opts.any) qs += '&any=1'
+      if (opts.refresh) qs += '&refresh=1'
+      if (opts.limit) qs += '&limit=' + encodeURIComponent(opts.limit)
+      return request('/api/local/find' + qs)
+    },
   }
 
   /**

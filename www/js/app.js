@@ -3159,6 +3159,8 @@
       flac24bit: 'Hi-Res 24Bit',
       auto: '自动',
       lossless: '严格无损',
+      '本地无损': '本地无损',
+      '本地': '本地文件',
     })[q] || (q || '未知')
   }
 
@@ -3190,7 +3192,8 @@
   ]
 
   function qShort(q) {
-    return ({ auto: '自动', lossless: '严格无损', '128k': '标准', '320k': '较高', flac: '无损', flac24bit: 'Hi-Res' })[q] || (q || '较高')
+    /* v62：本地接管时底栏只显示「本地」，无损细节在音质面板的徽标与实测行里 */
+    return ({ auto: '自动', lossless: '严格无损', '128k': '标准', '320k': '较高', flac: '无损', flac24bit: 'Hi-Res', '本地无损': '本地', '本地': '本地' })[q] || (q || '较高')
   }
 
   function soundOpen(tab) {
@@ -3265,6 +3268,8 @@
   function realInfoLine(info, real) {
     if (!info) return ''
     var parts = []
+    /* v62：本地文件自动接管时优先说明来源，避免和"在线实测"混淆 */
+    if (info.local) parts.push('本地文件')
     var codec = realCodec(real, info)
     if (codec) parts.push(codec)
     if (info.bitsPerSample && info.sampleRate) {
@@ -3273,6 +3278,7 @@
       parts.push(info.detail)
     }
     if (info.sizeText) parts.push(info.sizeText)
+    else if (info.local && info.size) parts.push(fmtSize(info.size))
     if (info.api) parts.push('音源 ' + info.api)
     return parts.join(' · ')
   }
@@ -3296,12 +3302,17 @@
     var sw = $('#qStrict')
     if (sw) sw.setAttribute('aria-pressed', st.quality === 'lossless' ? 'true' : 'false')
 
+    /* v62：优先本地高音质开关（在线点歌自动接管本地无损文件） */
+    var swL = $('#qLocal')
+    if (swL) swL.setAttribute('aria-pressed', Player.localAuto ? 'true' : 'false')
+
     /* 当前音频流实测结果 */
     var info = st.realInfo
     var title = $('#qRealTitle')
     var sub = $('#qRealSub')
     var badge = $('#qRealBadge')
     var song = Player.current
+    var lm = st.localMatch || null
     if (!song) {
       if (title) title.textContent = '尚未播放'
       if (sub) sub.textContent = '开始播放后这里显示当前音频流的实测编码'
@@ -3313,13 +3324,18 @@
     /* 标称 Hi-Res 却只拿到 16bit FLAC：请求档位与实际编码不一致 */
     var fakeHiRes = !!(info && (info.fakeHiRes || (info.requested === 'flac24bit' && real === 'flac')))
 
-    if (title) title.textContent = real ? (realLabel(real) || String(real).toUpperCase()) : '解析中…'
+    if (title) title.textContent = lm ? '本地文件' : (real ? (realLabel(real) || String(real).toUpperCase()) : '解析中…')
     if (sub) {
       var line = realInfoLine(info, real)
       sub.textContent = line || '已请求 ' + qShort(st.quality) + '，正在解析可用音源'
     }
     if (badge) {
-      if (fakeHiRes) {
+      if (lm) {
+        /* 本地文件接管：明确告知用户这曲没走在线音源 */
+        badge.hidden = false
+        badge.className = 'q-badge ok'
+        badge.textContent = lm.lossless ? '本地无损' : '本地文件'
+      } else if (fakeHiRes) {
         badge.hidden = false
         badge.className = 'q-badge warn'
         badge.textContent = '标称24bit·实测16bit'
@@ -3545,7 +3561,14 @@
   function renderSoundBadges() {
     var st = Player.state
     var ql = $('#qualityLabel')
-    if (ql) ql.textContent = qShort(st.realQuality || st.quality)
+    if (ql) {
+      ql.textContent = qShort(st.realQuality || st.quality)
+      /* v62：本曲走的是本地文件时高亮一下，避免"明明点了在线却像没联网"的困惑 */
+      var isLocal = !!st.localMatch
+      ql.classList.toggle('local', isLocal)
+      if (isLocal) ql.setAttribute('title', '本地文件：' + (st.localMatch.name || ''))
+      else ql.removeAttribute('title')
+    }
     var lab = $('#fxLabel')
     var fs = fxState()
     if (lab) {
@@ -4448,6 +4471,16 @@
           toast(on ? '已关闭严格无损（自动选档）' : '已开启严格无损：实测不是真无损就继续换源')
           break
         }
+        case 'q-local': {
+          var wasOn = el.getAttribute('aria-pressed') === 'true'
+          var nextLocal = !wasOn
+          if (Player.setLocalAuto) Player.setLocalAuto(nextLocal)
+          renderQualityPane()
+          toast(nextLocal
+            ? '已开启：在线点歌优先使用本地无损文件'
+            : '已关闭：全部使用在线音源')
+          break
+        }
         case 'cycle-mode':
           if (Player.cyclePlayMode) {
             var nm = Player.cyclePlayMode()
@@ -4972,6 +5005,15 @@
       }
     })
     Player.on('mode', renderPlayMode)
+    /* v62：本曲是否走了本地文件（在线点歌自动接管本地无损），刷新底栏与音质面板 */
+    Player.on('local', function () {
+      renderSoundBadges()
+      if ($('#soundPanel').classList.contains('open')) renderQualityPane()
+      if ($('#detailPanel').classList.contains('open')) renderPlayerSong()
+    })
+    Player.on('localAuto', function () {
+      if ($('#soundPanel').classList.contains('open')) renderQualityPane()
+    })
     Player.on('state', function () { updateSwipeState() })
     Player.on('song', function () {
       renderQualityPane()
